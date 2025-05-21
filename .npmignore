@@ -1,0 +1,24 @@
+# 소스 코드
+src/
+
+# 테스트 파일
+*.test.ts
+*.spec.ts
+test/
+tests/
+__tests__/
+
+# 설정 파일
+tsconfig.json
+.eslintrc.json
+jest.config.js
+
+# 예제 파일
+examples/
+
+# 기타 파일
+.git/
+.github/
+node_modules/
+coverage/
+*.log 

@@ -1,0 +1,45 @@
+{
+  "name": "@racgoo/scry",
+  "version": "0.0.18",
+  "description": "Trace your code with ease",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "eslint src --ext .ts",
+    "prepare": "npm run build",
+    "release": "npm run prepare && npm version patch && npm publish --access=public"
+  },
+  "keywords": [
+    "typescript",
+    "utility",
+    "library",
+    "trace",
+    "tracing",
+    "debug",
+    "debugging",
+    "debugging tools",
+    "debugging tools for typescript",
+    "debugging tools for javascript",
+    "debugging tools for node.js"
+  ],
+  "author": "Racgoo",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.24",
+    "@typescript-eslint/eslint-plugin": "^7.1.0",
+    "@typescript-eslint/parser": "^7.1.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2"
+  }
+}
