@@ -4,7 +4,8 @@
 <img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Version"/>
 <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
 <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/>
-![](https://d1085v6s0hknp1.cloudfront.net/boards/coinsect_blog/de70e635-96a5-4062-92bc-c61d2a5ea1a7_Scry.png)
+<img src=(https://d1085v6s0hknp1.cloudfront.net/boards/coinsect_blog/de70e635-96a5-4062-92bc-c61d2a5ea1a7_Scry.png) alt="Image />
+
 ## **JavaScript/TypeScript function call and execution flow tracking debugging tools**
 
 </div>
