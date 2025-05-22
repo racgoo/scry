@@ -5,16 +5,15 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "minified",
+    "dist",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc && tsc-alias && npm run minify",
+    "build": "tsc && tsc-alias",
     "test": "jest",
     "lint": "eslint src --ext .ts",
     "example": "ts-node examples/test.ts",
-    "minify": "terser dist/**/*.js --output minified/index.min.js",
     "prepare": "npm run build",
     "release": "npm run prepare && npm version patch && npm publish --access=public"
   },
