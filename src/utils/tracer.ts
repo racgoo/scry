@@ -1,30 +1,37 @@
-// 인터페이스 정의 부분 삭제
+import Output from "@utils/output";
+
 class Tracer {
   private static isTracing = false;
-  private static stack: string[] = [];
+  private static details: Detail[] = [];
   // 바인딩된 함수를 정적 속성으로 저장
   private static boundOnTrace = Tracer.onTrace.bind(Tracer) as EventListener;
 
   static start() {
     if (this.isTracing) {
-      console.warn("[TRACE] 이미 추적 중입니다.");
+      Output.print(
+        "이미 추적이 진행 중입니다. Tracer.end()를 먼저 호출해주세요."
+      );
       return;
     }
-
     this.isTracing = true;
-    // 저장된 바인딩 함수 사용
     globalThis.addEventListener("scry:trace", this.boundOnTrace);
-    console.log("[TRACE] 추적 시작");
+    Output.print("추적 시작");
   }
 
   static end() {
+    if (!this.isTracing) {
+      Output.print(
+        "추적이 진행 중이지 않습니다. Tracer.start()를 먼저 호출해주세요."
+      );
+      return;
+    }
     this.isTracing = false;
-    // 저장된 동일한 바인딩 함수 사용
     globalThis.removeEventListener("scry:trace", this.boundOnTrace);
-    console.log("[TRACE] 추적 종료", this.stack);
-    const tree = this.makeTree(this.stack);
-    console.log(tree);
-    this.stack = [];
+    const tree = this.makeTree(this.details);
+    Output.print("추적 종료");
+    Output.print("실행 트리", tree);
+    this.details = [];
+    return tree;
   }
 
   static init() {
@@ -32,63 +39,78 @@ class Tracer {
   }
 
   private static onTrace(event: CustomEvent) {
-    Tracer.stack.push(event.detail);
+    Tracer.details.push(event.detail);
   }
 
-  static makeTree(events: any[]) {
+  static makeTree(details: any[]): TraceNode[] {
     // 트리 구조를 저장할 배열
-    const tree: any[] = [];
-    // 현재 활성 노드 스택
-    const stack: any[] = [];
+    const tree: TraceNode[] = [];
+    // 노드 맵 (traceId로 인덱싱)
+    const nodeMap = new Map<string, TraceNode>();
+    // 부모-자식 관계를 추적하기 위한 스택
+    const callStack: string[] = [];
 
-    for (let i = 0; i < this.stack.length; i++) {
-      const event = events[i];
+    // 1단계: 모든 enter 이벤트 노드 생성 및 맵에 저장
+    for (let i = 0; i < details.length; i++) {
+      const detail = details[i];
 
-      if (event.type === "enter") {
+      if (detail.type === "enter") {
         // 새 노드 생성
-        const node = {
-          name: event.name,
-          args: event.args || [],
+        const node: TraceNode = {
+          traceId: detail.traceId,
+          name: detail.name,
+          source: detail.source,
+          args: detail.args || [],
           children: [],
-          startIndex: i,
+          timestamp: detail.timestamp,
+          completed: false,
+          chained: detail.chained,
+          parentTraceId: detail.parentTraceId,
         };
 
-        // 현재 스택에 노드가 있으면 해당 노드의 자식으로 추가
-        if (stack.length > 0) {
-          stack[stack.length - 1].children.push(node);
+        // 맵에 저장
+        nodeMap.set(detail.traceId, node);
+
+        // 실행 스택 추적 (비동기 함수도 대응)
+        callStack.push(detail.traceId);
+
+        // 부모-자식 관계 설정
+        if (callStack.length > 1) {
+          const parentId = callStack[callStack.length - 2];
+          const parent = nodeMap.get(parentId);
+
+          if (parent && !parent.completed) {
+            parent.children.push(node);
+          } else {
+            // 부모가 이미 완료된 경우 루트로 처리
+            tree.push(node);
+          }
         } else {
-          // 루트 레벨 노드면 결과 트리에 직접 추가
+          // 루트 레벨 노드
           tree.push(node);
         }
+      } else if (detail.type === "exit") {
+        // traceId로 노드 찾기
+        const node = nodeMap.get(detail.traceId);
 
-        // 새 노드를 스택에 추가
-        stack.push(node);
-      } else if (event.type === "exit") {
-        // 일치하는 enter 노드 찾기
-        if (stack.length > 0 && stack[stack.length - 1].name === event.name) {
-          const node = stack.pop();
+        if (node) {
+          // exit 이벤트 정보 추가
+          node.returnValue = detail.returnValue;
+          node.completed = true;
 
-          // exit 이벤트의 정보 추가
-          node.returnValue = event.returnValue;
-          node.endIndex = i;
-          node.duration = node.endIndex - node.startIndex;
-        }
-        // 스택이 비어있거나 매칭되지 않는 경우 (비정상 케이스) 처리
-        else {
-          console.warn(`[TRACE] 매칭되지 않는 exit 이벤트: ${event.name}`);
+          if (detail.timestamp && node.timestamp) {
+            node.duration = detail.timestamp - node.timestamp;
+          }
+
+          // 콜스택에서 제거 (가장 최근에 추가된 같은 traceId 항목)
+          const stackIndex = callStack.lastIndexOf(detail.traceId);
+          if (stackIndex !== -1) {
+            callStack.splice(stackIndex, 1);
+          }
         }
       }
     }
-
-    // 처리가 끝났는데 스택에 노드가 남아있다면 경고
-    if (stack.length > 0) {
-      console.warn(
-        `[TRACE] 닫히지 않은 함수 호출이 있습니다: ${stack
-          .map((n) => n.name)
-          .join(", ")}`
-      );
-    }
-
+    tree.pop(); //end 이벤트 제거
     return tree;
   }
 }
