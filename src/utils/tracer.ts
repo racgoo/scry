@@ -34,10 +34,6 @@ class Tracer {
     return tree;
   }
 
-  static init() {
-    (globalThis as any).Tracer = Tracer;
-  }
-
   private static onTrace(event: CustomEvent) {
     Tracer.details.push(event.detail);
   }

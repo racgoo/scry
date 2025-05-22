@@ -54,17 +54,7 @@ module.exports = {
 };
 ```
 
-### 2. Tracer 초기화
-
-애플리케이션 진입점 파일(예: index.ts, main.js) 최상단에 Tracer를 초기화합니다:
-
-```js
-import { Tracer } from "@racgoo/scry";
-
-Tracer.init();
-```
-
-### 3. 함수 실행 추적
+### 2. 함수 실행 추적
 
 Tracer.start() 와 Tracer.end() 사이에 실행되는 모든 함수 및 메서드 호출의 이름, 입력값, 결과값이 출력됩니다.
 
