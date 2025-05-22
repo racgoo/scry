@@ -1,4 +1,5 @@
 import * as babel from "@babel/core";
+import UUID from "@utils/uuid";
 
 const processedNodes = new WeakSet();
 
@@ -20,8 +21,6 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
           ) {
             return;
           }
-
-          // scry 임포트 확인 및 추가는 필요 없음 - 직접 람다식 사용
         },
       },
 
@@ -63,12 +62,20 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
               fnName = callee.property.name;
             }
 
-            // 새 노드 생성 (마커 주석 추가)
+            // generate new node (add marker comment)
             const newNode = t.callExpression(
               t.arrowFunctionExpression(
                 [],
                 t.blockStatement([
-                  // 'enter' 이벤트 발생 - 함수 실행 전
+                  // generate traceId(UUID)
+                  t.variableDeclaration("const", [
+                    t.variableDeclarator(
+                      t.identifier("traceId"),
+                      t.stringLiteral(UUID.generateV4())
+                    ),
+                  ]),
+
+                  // generate 'enter' event
                   t.expressionStatement(
                     t.callExpression(
                       t.memberExpression(
@@ -91,6 +98,10 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
                                   t.stringLiteral(fnName)
                                 ),
                                 t.objectProperty(
+                                  t.identifier("traceId"),
+                                  t.identifier("traceId")
+                                ),
+                                t.objectProperty(
                                   t.identifier("args"),
                                   t.arrayExpression(
                                     path.node
@@ -105,7 +116,7 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
                     )
                   ),
 
-                  // const returnValue = fn(...args)
+                  // generate returnValue(function call result)
                   t.variableDeclaration("const", [
                     t.variableDeclarator(
                       t.identifier("returnValue"),
@@ -113,7 +124,7 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
                     ),
                   ]),
 
-                  // 'exit' 이벤트 발생 - 함수 종료 후
+                  // generate 'exit' event
                   t.expressionStatement(
                     t.callExpression(
                       t.memberExpression(
@@ -136,6 +147,10 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
                                   t.stringLiteral(fnName)
                                 ),
                                 t.objectProperty(
+                                  t.identifier("traceId"),
+                                  t.identifier("traceId")
+                                ),
+                                t.objectProperty(
                                   t.identifier("returnValue"),
                                   t.identifier("returnValue")
                                 ),
@@ -154,7 +169,7 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
               []
             );
 
-            // 마커 주석 추가
+            // add marker comment
             newNode.leadingComments = [
               { type: "CommentBlock", value: ` ${TRACE_MARKER} ` },
             ];
