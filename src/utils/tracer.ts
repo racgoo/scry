@@ -1,12 +1,12 @@
 import Output from "@utils/output";
 
 class Tracer {
-  private static isTracing = false;
-  private static details: Detail[] = [];
+  private isTracing = false;
+  private details: Detail[] = [];
   // 바인딩된 함수를 정적 속성으로 저장
-  private static boundOnTrace = Tracer.onTrace.bind(Tracer) as EventListener;
+  private boundOnTrace = this.onTrace.bind(this) as EventListener;
 
-  static start() {
+  public start() {
     if (this.isTracing) {
       Output.print(
         "이미 추적이 진행 중입니다. Tracer.end()를 먼저 호출해주세요."
@@ -18,7 +18,7 @@ class Tracer {
     Output.print("추적 시작");
   }
 
-  static end() {
+  end() {
     if (!this.isTracing) {
       Output.print(
         "추적이 진행 중이지 않습니다. Tracer.start()를 먼저 호출해주세요."
@@ -34,11 +34,11 @@ class Tracer {
     return tree;
   }
 
-  private static onTrace(event: CustomEvent) {
-    Tracer.details.push(event.detail);
+  private onTrace(event: CustomEvent) {
+    this.details.push(event.detail);
   }
 
-  static makeTree(details: any[]): TraceNode[] {
+  private makeTree(details: Detail[]): TraceNode[] {
     // 트리 구조를 저장할 배열
     const tree: TraceNode[] = [];
     // 노드 맵 (traceId로 인덱싱)
@@ -58,7 +58,7 @@ class Tracer {
           source: detail.source,
           args: detail.args || [],
           children: [],
-          timestamp: detail.timestamp,
+          timestamp: 0,
           completed: false,
           chained: detail.chained,
           parentTraceId: detail.parentTraceId,
@@ -93,10 +93,10 @@ class Tracer {
           // exit 이벤트 정보 추가
           node.returnValue = detail.returnValue;
           node.completed = true;
-
-          if (detail.timestamp && node.timestamp) {
-            node.duration = detail.timestamp - node.timestamp;
-          }
+          node.duration = 0;
+          // if (detail.timestamp && node.timestamp) {
+          //   node.duration = detail.timestamp - node.timestamp;
+          // }
 
           // 콜스택에서 제거 (가장 최근에 추가된 같은 traceId 항목)
           const stackIndex = callStack.lastIndexOf(detail.traceId);

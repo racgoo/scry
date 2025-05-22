@@ -20,4 +20,5 @@ interface Detail {
   args: any[];
   chained: boolean;
   parentTraceId: string;
+  returnValue: any;
 }

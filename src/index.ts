@@ -1,4 +1,6 @@
-import Tracer from "@utils/tracer";
+import * as GlobalTracer from "@utils/tracer";
 import scryBabelPlugin from "@babel/scry-babel-plugin";
+
+const Tracer = new GlobalTracer.default();
 
 export { Tracer, scryBabelPlugin };

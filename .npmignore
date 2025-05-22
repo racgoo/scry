@@ -1,5 +1,6 @@
 # 소스 코드
 src/
+dist/
 
 # 테스트 파일
 *.test.ts
