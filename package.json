@@ -1,6 +1,6 @@
 {
   "name": "@racgoo/scry",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "description": "Trace your code with ease",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
