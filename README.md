@@ -1,20 +1,18 @@
 # 🔍 Scry
 
-<div>
-
-  
-</div>
-
-<div align="left">
-  <img width="500" alt="Scry" src="https://github.com/user-attachments/assets/bfd20dab-5679-43d0-b385-9d37e26fb9df" />  
-</div>
+<div align="center">
+<img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Version"/>
+<img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
+<img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/>
 
 ## **JavaScript/TypeScript function call and execution flow tracking debugging tools**
+
+</div>
 
 ---
 
 ## Introduction
-<img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
+
 Scry is a JavaScript and TypeScript function execution context tracing library
 that records every function and method call—along with its name, input, and output.
 
