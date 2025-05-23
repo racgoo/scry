@@ -60,7 +60,6 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
           path: babel.NodePath<babel.types.CallExpression>,
           state: babel.PluginPass
         ) {
-          console.log("babel is running");
           try {
             if (ENV_MODE !== "development") {
               return;
