@@ -54,6 +54,26 @@ Add the following plugin to your babel.config.js or .babelrc file
 ```jsx
 import { scryBabelPlugin } from "@racgoo/scry";
 ⚠️ Plugin setup may differ depending on the bundler you're using. ⚠️
+
+#vite example
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { scryBabelPlugin } from "@racgoo/scry";
+
+export default defineConfig({
+  resolve: {
+    preserveSymlinks: true,
+  },
+  plugins: [
+    react({
+      babel: {
+        presets: ["@babel/preset-typescript", "@babel/preset-react"],
+        plugins: [scryBabelPlugin],
+      },
+    }),
+  ],
+});
+
 ```
 
 ### 2. Execution Context Tracing

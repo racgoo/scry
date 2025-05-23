@@ -1,4 +1,5 @@
 import Output from "@utils/output";
+import Format from "@tracer/format";
 
 interface TraceNode {
   traceId: string;
@@ -158,67 +159,6 @@ class Tracer {
     return tree;
   }
 
-  private generateHtmlContent(node: TraceNode): string {
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Trace Result - ${node.name}</title>
-          <style>
-            body { 
-              font-family: monospace; 
-              padding: 20px;
-              background: #f5f5f5;
-            }
-            .trace-info { 
-              border: 1px solid #ccc; 
-              padding: 20px;
-              margin: 20px 0;
-              background: white;
-              border-radius: 8px;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .args { 
-              color: #666;
-              margin: 10px 0;
-            }
-            .return { 
-              color: #0066cc;
-              margin: 10px 0;
-            }
-            .source { 
-              color: #888;
-              margin: 10px 0;
-              font-size: 0.9em;
-            }
-            pre {
-              background: #f8f8f8;
-              padding: 10px;
-              border-radius: 4px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="trace-info">
-            <h2>${node.name}</h2>
-            <div class="args">
-              <strong>Arguments:</strong>
-              <pre>${JSON.stringify(node.args, null, 2)}</pre>
-            </div>
-            <div class="return">
-              <strong>Return Value:</strong>
-              <pre>${JSON.stringify(node.returnValue, null, 2)}</pre>
-            </div>
-            <div class="source">
-              <strong>Source:</strong> ${node.source}
-            </div>
-            ${node.duration ? `<div>Duration: ${node.duration}ms</div>` : ""}
-          </div>
-        </body>
-      </html>
-    `;
-  }
-
   private makeConsoleResult(tree: TraceNode[], level = 0): string[] {
     const result: string[] = [];
 
@@ -226,7 +166,7 @@ class Tracer {
       const indent = "  ".repeat(level);
       const prefix = level > 0 ? "└─ " : "";
 
-      const htmlContent = this.generateHtmlContent(node);
+      const htmlContent = Format.generateHtmlContent(node);
       const dataUrl = `data:text/html;base64,${this.toBase64(htmlContent)}`;
       const args = node.args.map((arg) => JSON.stringify(arg)).join(", ");
 
@@ -261,16 +201,5 @@ class Tracer {
     return this.isNodeJS() ? Buffer.from(str).toString("base64") : btoa(str);
   }
 }
-
-// emitTraceEvent 함수 수정
-// function emitTraceEvent(detail: any) {
-//   if (typeof window === "undefined") {
-//     const eventEmitter = new EventEmitter();
-//     eventEmitter.emit("scry:trace", detail); // process.emit 대신 eventEmitter 사용
-//   } else {
-//     const event = new CustomEvent("scry:trace", { detail });
-//     globalThis.dispatchEvent(event);
-//   }
-// }
 
 export default Tracer;
