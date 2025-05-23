@@ -12,7 +12,8 @@
     "paths": {
       "@/*": ["src/*"],
       "@utils/*": ["src/utils/*"],
-      "@babel/*": ["src/babel/*"]
+      "@babel/*": ["src/babel/*"],
+      "@tracer/*": ["src/tracer/*"]
     }
   },
   "include": ["src"],

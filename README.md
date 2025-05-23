@@ -60,6 +60,8 @@ import { scryBabelPlugin } from "@racgoo/scry";
 
 All function and method calls executed between `Tracer.start()` and `Tracer.end()` will have their names, input values, and return values automatically logged and recorded.
 
+⚠️ Only works when NODE_ENV=development is set in your Node.js environment. ⚠️
+
 ```jsx
 import { Tracer } from "@racgoo/scry";
 
@@ -75,6 +77,8 @@ Tracer.start();
 bar(5);
 Tracer.end();
 ```
+
+✨ Files inside node_modules are not traced. If you need this feature, feel free to contact us. ✨
 
 ---
 

@@ -1,5 +1,4 @@
 import * as babel from "@babel/core";
-import UUID from "@utils/uuid";
 
 const processedNodes = new WeakSet();
 const ENV_MODE = process.env.NODE_ENV;
@@ -112,7 +111,35 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
                   t.variableDeclaration("const", [
                     t.variableDeclarator(
                       t.identifier("traceId"),
-                      t.stringLiteral(UUID.generateV4())
+                      t.conditionalExpression(
+                        t.binaryExpression(
+                          "===",
+                          t.unaryExpression(
+                            "typeof",
+                            t.memberExpression(
+                              t.identifier("globalThis"),
+                              t.identifier("__scryCalledCount")
+                            )
+                          ),
+                          t.stringLiteral("undefined")
+                        ),
+                        t.assignmentExpression(
+                          "=",
+                          t.memberExpression(
+                            t.identifier("globalThis"),
+                            t.identifier("__scryCalledCount")
+                          ),
+                          t.numericLiteral(0)
+                        ),
+                        t.updateExpression(
+                          "++",
+                          t.memberExpression(
+                            t.identifier("globalThis"),
+                            t.identifier("__scryCalledCount")
+                          ),
+                          false
+                        )
+                      )
                     ),
                   ]),
 
