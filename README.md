@@ -21,7 +21,7 @@ Scry helps you clearly understand complex code flow and analyze relationships be
 
 ---
 
-## Fetures
+## Features
 
 - Full recording of function and method calls, including input and output values
 

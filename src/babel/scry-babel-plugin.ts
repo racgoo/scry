@@ -2,6 +2,7 @@ import * as babel from "@babel/core";
 import UUID from "@utils/uuid";
 
 const processedNodes = new WeakSet();
+const ENV_MODE = process.env.NODE_ENV;
 
 function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
   // 특수 마커 - 변환 유무 확인용
@@ -30,6 +31,10 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
           state: babel.PluginPass
         ) {
           try {
+            if (ENV_MODE !== "development") {
+              return;
+            }
+
             const callee = path.node.callee;
 
             // 이미 변환된 호출 식별 및 건너뛰기
