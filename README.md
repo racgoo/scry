@@ -82,6 +82,22 @@ Tracer.end();
 
 ---
 
+### 🔧 Future Work
+
+#### Enhanced Parameter & Return Type Tracking
+
+Further improvements are underway to better validate and track function parameters and return values, especially for complex nodes such as `BinaryExpression`, `CallExpression`, and others.
+
+#### Async Function Support
+
+Tracing for `asynchronous functions` is not yet implemented. Development is currently in progress.
+
+#### Node.js Runtime Support
+
+Full support for tracing in Node.js environments is under active development.
+
+---
+
 ### Contact
 
 ###### Have questions, suggestions, or want to contribute?

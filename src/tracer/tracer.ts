@@ -27,6 +27,12 @@ class Tracer {
   // 바인딩된 함수를 정적 속성으로 저장
   private boundOnTrace = this.onTrace.bind(this) as EventListener;
 
+  // 전역 이벤트 이미터 생성
+
+  private isNodeJS(): boolean {
+    return typeof window === "undefined" && typeof process !== "undefined";
+  }
+
   public start() {
     if (this.isTracing) {
       Output.print(
@@ -36,7 +42,15 @@ class Tracer {
     }
     this.isTracing = true;
     this.duration = Date.now();
-    globalThis.addEventListener("scry:trace", this.boundOnTrace);
+
+    // 환경에 따라 다른 이벤트 리스너 등록
+    if (this.isNodeJS()) {
+      process.on("scry:trace", this.boundOnTrace);
+    } else {
+      // 브라우저 환경에서는 addEventListener 사용
+      globalThis.addEventListener("scry:trace", this.boundOnTrace);
+    }
+
     Output.print("추적 시작");
   }
 
@@ -48,18 +62,31 @@ class Tracer {
       return;
     }
     this.isTracing = false;
-    globalThis.removeEventListener("scry:trace", this.boundOnTrace);
+
+    // 환경에 따라 다른 이벤트 리스너 제거
+    if (this.isNodeJS()) {
+      process.removeListener("scry:trace", this.boundOnTrace);
+    } else {
+      globalThis.removeEventListener("scry:trace", this.boundOnTrace);
+    }
+
     this.duration = Date.now() - this.duration;
     const tree = this.makeTree(this.details);
     Output.print("추적 종료");
-    const displayResult = this.makeConsoleResult(tree).join("\n");
-    Output.print("실행 트리", "\n" + displayResult);
+    const displayResult = this.makeConsoleResult(tree);
+    for (let i = 0; i < displayResult.length; i += 2) {
+      console.groupCollapsed(displayResult[i]);
+      console.log(displayResult[i + 1]);
+      console.groupEnd();
+    }
     this.details = [];
     return tree;
   }
 
-  private onTrace(event: CustomEvent) {
-    this.details.push(event.detail);
+  private onTrace(event: any) {
+    // Node.js 환경에서는 event가 직접 데이터를 포함
+    const detail = this.isNodeJS() ? event : event.detail;
+    this.details.push(detail);
   }
 
   private makeTree(details: Detail[]): TraceNode[] {
@@ -131,71 +158,65 @@ class Tracer {
     return tree;
   }
 
-  private generateDataUrl(node: TraceNode): string {
-    // 노드 데이터를 Base64로 인코딩
-    const data = {
-      name: node.name,
-      args: node.args,
-      returnValue: node.returnValue,
-      source: node.source,
-      duration: node.duration,
-      timestamp: node.timestamp,
-      children: node.children,
-    };
-
-    const jsonStr = JSON.stringify(data);
-    const base64Data =
-      typeof window !== "undefined"
-        ? btoa(jsonStr) // 브라우저
-        : Buffer.from(jsonStr).toString("base64"); // Node.js
-
-    // HTML 템플릿 생성
-    const html = `
+  private generateHtmlContent(node: TraceNode): string {
+    return `
       <!DOCTYPE html>
       <html>
-      <head>
-        <title>Scry Trace Viewer - ${node.name}</title>
-        <style>
-          body { font-family: monospace; padding: 20px; }
-          .trace-info { border: 1px solid #ccc; padding: 15px; margin: 10px 0; }
-          .args { color: #666; }
-          .return { color: #0066cc; }
-          .source { color: #888; }
-        </style>
-      </head>
-      <body>
-        <script>
-          const traceData = JSON.parse(atob('${base64Data}'));
-          
-          document.body.innerHTML = \`
-            <div class="trace-info">
-              <h2>\${traceData.name}</h2>
-              <div class="args">
-                Arguments: \${JSON.stringify(traceData.args, null, 2)}
-              </div>
-              <div class="return">
-                Return Value: \${JSON.stringify(traceData.returnValue, null, 2)}
-              </div>
-              <div class="source">
-                Source: \${traceData.source}
-              </div>
-              <div>
-                Duration: \${traceData.duration}ms
-              </div>
+        <head>
+          <title>Trace Result - ${node.name}</title>
+          <style>
+            body { 
+              font-family: monospace; 
+              padding: 20px;
+              background: #f5f5f5;
+            }
+            .trace-info { 
+              border: 1px solid #ccc; 
+              padding: 20px;
+              margin: 20px 0;
+              background: white;
+              border-radius: 8px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .args { 
+              color: #666;
+              margin: 10px 0;
+            }
+            .return { 
+              color: #0066cc;
+              margin: 10px 0;
+            }
+            .source { 
+              color: #888;
+              margin: 10px 0;
+              font-size: 0.9em;
+            }
+            pre {
+              background: #f8f8f8;
+              padding: 10px;
+              border-radius: 4px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="trace-info">
+            <h2>${node.name}</h2>
+            <div class="args">
+              <strong>Arguments:</strong>
+              <pre>${JSON.stringify(node.args, null, 2)}</pre>
             </div>
-          \`;
-        </script>
-      </body>
+            <div class="return">
+              <strong>Return Value:</strong>
+              <pre>${JSON.stringify(node.returnValue, null, 2)}</pre>
+            </div>
+            <div class="source">
+              <strong>Source:</strong> ${node.source}
+            </div>
+            ${node.duration ? `<div>Duration: ${node.duration}ms</div>` : ""}
+          </div>
+        </body>
       </html>
     `;
-
-    // HTML을 Base64로 인코딩하여 data URL 생성
-    const htmlBase64 =
-      typeof window !== "undefined"
-        ? btoa(html)
-        : Buffer.from(html).toString("base64");
-
-    return `data:text/html;base64,${htmlBase64}`;
   }
 
   private makeConsoleResult(tree: TraceNode[], level = 0): string[] {
@@ -205,13 +226,28 @@ class Tracer {
       const indent = "  ".repeat(level);
       const prefix = level > 0 ? "└─ " : "";
 
-      // 데이터 URL 생성
-      const dataUrl = this.generateDataUrl(node);
+      const htmlContent = this.generateHtmlContent(node);
+      const dataUrl = `data:text/html;base64,${this.toBase64(htmlContent)}`;
+      const args = node.args.map((arg) => JSON.stringify(arg)).join(", ");
 
-      // 함수 정보와 링크 생성
-      result.push(
-        `${indent}${prefix}${node.name}(함수) ` + `[🔍 상세보기](${dataUrl})`
-      );
+      // Node.js 환경
+      if (this.isNodeJS()) {
+        // terminal-link나 ANSI 이스케이프 코드 사용
+        const visibleLink = `\u001b[34m\u001b[4m[상세보기]\u001b[0m`;
+        const hiddenUrl = `\u001b[8m${dataUrl}\u001b[0m`;
+        result.push(
+          `${indent}${prefix}${node.name}(${args})`,
+          `${indent}${prefix}${visibleLink}${hiddenUrl}`
+        );
+      }
+      // 브라우저 환경
+      else {
+        // console.log의 CSS 스타일링 사용
+        result.push(
+          `${indent}${prefix}${node.name}(${args})`,
+          `${indent}${prefix}[Detail] ${dataUrl}`
+        );
+      }
 
       if (node.children?.length > 0) {
         result.push(...this.makeConsoleResult(node.children, level + 1));
@@ -220,6 +256,21 @@ class Tracer {
 
     return result;
   }
+
+  private toBase64(str: string): string {
+    return this.isNodeJS() ? Buffer.from(str).toString("base64") : btoa(str);
+  }
 }
+
+// emitTraceEvent 함수 수정
+// function emitTraceEvent(detail: any) {
+//   if (typeof window === "undefined") {
+//     const eventEmitter = new EventEmitter();
+//     eventEmitter.emit("scry:trace", detail); // process.emit 대신 eventEmitter 사용
+//   } else {
+//     const event = new CustomEvent("scry:trace", { detail });
+//     globalThis.dispatchEvent(event);
+//   }
+// }
 
 export default Tracer;
