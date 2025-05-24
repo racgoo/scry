@@ -12,6 +12,10 @@
   <img width="320" alt="Scry" src="https://github.com/user-attachments/assets/d6ca7480-658b-484a-8a51-00edbcb082c7" />
 </div>
 
+Github: [https://github.com/racgoo/scry](https://github.com/racgoo/scry)
+
+NPM: [https://www.npmjs.com/package/@racgoo/scry](https://www.npmjs.com/package/@racgoo/scry)
+
 ---
 
 ## Introduction
