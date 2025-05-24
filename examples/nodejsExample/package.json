@@ -20,6 +20,6 @@
     "nodemon": "^3.1.10"
   },
   "dependencies": {
-    "@racgoo/scry": "^0.0.28"
+    "@racgoo/scry": "^0.0.29"
   }
 }
