@@ -3,7 +3,7 @@
 # **JavaScript/TypeScript function call and execution flow tracking debugging tools**
 
 <div align="center">
-  <img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-0.0.31-blue.svg" alt="Version"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/>
 </div>
@@ -11,7 +11,6 @@
 <div align="center">
   <img width="320" alt="Scry" src="https://github.com/user-attachments/assets/d6ca7480-658b-484a-8a51-00edbcb082c7" />
 </div>
-
 
 ---
 
@@ -32,8 +31,8 @@ Scry helps you clearly understand complex code flow and analyze relationships be
 - Automatic tracking of function names and call stacks
 
 - Works seamlessly in both JavaScript and TypeScript (Node.js and Browser environments).
-In the `Browser`, trace results are displayed directly in the `console` with a clickable link to view them in a new tab.
-In `Node.js`, results are saved as a `current-trace.html` file in the scry folder at the project root, which you can open in a browser to view the trace.
+  In the `Browser`, trace results are displayed directly in the `console` with a clickable link to view them in a new tab.
+  In `Node.js`, results are saved as a `current-trace.html` file in the scry folder at the project root, which you can open in a browser to view the trace.
 
 ---
 
@@ -42,20 +41,25 @@ In `Node.js`, results are saved as a `current-trace.html` file in the scry folde
 - ### browser sample
 
   #### TraceList(Console)
+
   <img width="1412" alt="스크린샷 2025-05-24 오후 6 12 39" src="https://github.com/user-attachments/assets/43cb7122-6bca-42b3-b82f-19784ce47eba" />
 
   #### TraceDetail(WebUI)
+
   <img width="1432" alt="스크린샷 2025-05-24 오후 6 05 40" src="https://github.com/user-attachments/assets/d7f664bc-0c5a-4bef-91f4-1e698487149d" />
 
 - ### nodejs sample
 
   ##### TraceList(HTML file)
+
   Save as static file -> project-root/scry/current-trace.html
 
   #### TraceList(WebUI)
+
   <img width="1440" alt="스크린샷 2025-05-24 오후 6 04 18" src="https://github.com/user-attachments/assets/fd447cbc-73ce-4dd4-945c-739b7cf050c9" />
 
   #### TraceDetail(WebUI)
+
   <img width="1437" alt="스크린샷 2025-05-24 오후 6 04 36" src="https://github.com/user-attachments/assets/c56215e7-59a0-4f38-a0d0-c2758c80a69d" />
 
 ---
