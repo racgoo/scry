@@ -67,7 +67,6 @@ export default defineConfig({
   plugins: [
     react({
       babel: {
-        presets: ["@babel/preset-typescript", "@babel/preset-react"],
         plugins: [scryBabelPlugin],
       },
     }),

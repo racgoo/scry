@@ -4,8 +4,8 @@ const processedNodes = new WeakSet();
 const ENV_MODE = process.env.NODE_ENV;
 
 function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
-  // 특수 마커 - 변환 유무 확인용
-  const TRACE_MARKER = "___SCRY_TRACED___";
+  // 마커 변수명 상수로 정의
+  const TRACE_MARKER = "__SCRY_MARK__";
 
   // 이벤트 발생 함수 생성
   const createEmitTraceEvent = (detail: any) => {
@@ -74,7 +74,17 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
               // 특수 마커 주석 있는지 확인
               path.node.leadingComments?.some((comment) =>
                 comment.value.includes(TRACE_MARKER)
-              )
+              ) ||
+              // 이벤트 리스너 등록 함수 호출인지 체크
+              (t.isMemberExpression(callee) &&
+                t.isIdentifier(callee.object) &&
+                callee.object.name === "process" &&
+                t.isIdentifier(callee.property) &&
+                ["on", "emit"].includes(callee.property.name)) ||
+              // 또는 더 일반적으로 process 관련 호출은 모두 제외
+              (t.isMemberExpression(callee) &&
+                t.isIdentifier(callee.object) &&
+                callee.object.name === "process")
             ) {
               return;
             }
@@ -138,6 +148,13 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
               t.arrowFunctionExpression(
                 [],
                 t.blockStatement([
+                  // 마커 변수 선언 추가
+                  t.variableDeclaration("const", [
+                    t.variableDeclarator(
+                      t.identifier(TRACE_MARKER),
+                      t.booleanLiteral(true)
+                    ),
+                  ]),
                   // traceId 생성
                   t.variableDeclaration("const", [
                     t.variableDeclarator(

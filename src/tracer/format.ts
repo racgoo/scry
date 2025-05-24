@@ -1,4 +1,117 @@
 class Format {
+  static generateHtmlRoot(items: [string, string][]): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Scry Trace Results</title>
+          <style>
+            body { 
+              font-family: monospace; 
+              padding: 20px;
+              background: #f5f5f5;
+            }
+            .trace-list {
+              display: flex;
+              flex-direction: column;
+              gap: 10px;
+            }
+            .trace-item {
+              border: 1px solid #ccc;
+              padding: 15px;
+              background: white;
+              border-radius: 8px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              cursor: pointer;
+              transition: all 0.2s;
+            }
+            .trace-item:hover {
+              transform: translateY(-2px);
+              box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            }
+            .trace-name {
+              font-weight: bold;
+              color: #333;
+            }
+            .modal {
+              display: none;
+              position: fixed;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              background: rgba(0, 0, 0, 0.5);
+            }
+            .modal-content {
+              position: fixed;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              width: 90%;
+              height: 90%;
+              background: white;
+              border-radius: 8px;
+              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            .modal iframe {
+              width: 100%;
+              height: 100%;
+              border: none;
+              border-radius: 8px;
+            }
+            .close-btn {
+              position: absolute;
+              right: 10px;
+              top: 10px;
+              cursor: pointer;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>[@racgoo/scry] Trace Results</h1>
+          <div class="trace-list">
+            ${items
+              .map(
+                ([text, url]) => `
+              <div class="trace-item" onclick="showModal('${url}')" >
+                <span>${text}</span>
+              </div>
+            `
+              )
+              .join("")}
+          </div>
+
+          <div id="modal" class="modal" onclick="hideModal(event)">
+            <div class="modal-content">
+              <iframe id="modal-iframe"></iframe>
+            </div>
+          </div>
+
+          <script>
+            function showModal(url) {
+              document.getElementById('modal-iframe').src = url;
+              document.getElementById('modal').style.display = 'block';
+            }
+
+            function hideModal(event) {
+              if (event.target.className === 'modal') {
+                document.getElementById('modal').style.display = 'none';
+                document.getElementById('modal-iframe').src = '';
+              }
+            }
+
+            document.addEventListener('keydown', (e) => {
+              if (e.key === 'Escape') {
+                document.getElementById('modal').style.display = 'none';
+                document.getElementById('modal-iframe').src = '';
+              }
+            });
+          </script>
+        </body>
+      </html>
+    `;
+  }
+
   static generateHtmlContent(node: TraceNode): string {
     return `
       <!DOCTYPE html>

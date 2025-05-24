@@ -75,11 +75,26 @@ class Tracer {
     const tree = this.makeTree(this.details);
     Output.print("추적 종료");
     const displayResult = this.makeConsoleResult(tree);
-    for (let i = 0; i < displayResult.length; i += 2) {
-      console.groupCollapsed(displayResult[i]);
-      console.log(displayResult[i + 1]);
-      console.groupEnd();
+    if (this.isNodeJS()) {
+      const linkList: [string, string][] = [];
+      for (let i = 0; i < displayResult.length; i += 2) {
+        linkList.push([displayResult[i], displayResult[i + 1]]);
+      }
+      const htmlRoot = Format.generateHtmlRoot(linkList);
+      import("fs").then((fs) => {
+        if (!fs.existsSync("scry")) {
+          fs.mkdirSync("scry");
+        }
+        fs.writeFileSync("scry/curernt-trace.html", htmlRoot);
+      });
+    } else {
+      for (let i = 0; i < displayResult.length; i += 2) {
+        console.groupCollapsed(displayResult[i]);
+        console.log(displayResult[i + 1]);
+        console.groupEnd();
+      }
     }
+
     this.details = [];
     return tree;
   }
@@ -163,7 +178,7 @@ class Tracer {
     const result: string[] = [];
 
     for (const node of tree) {
-      const indent = "  ".repeat(level);
+      const indent = "ㅤㅤ".repeat(level);
       const prefix = level > 0 ? "└─ " : "";
 
       const htmlContent = Format.generateHtmlContent(node);
@@ -173,12 +188,7 @@ class Tracer {
       // Node.js 환경
       if (this.isNodeJS()) {
         // terminal-link나 ANSI 이스케이프 코드 사용
-        const visibleLink = `\u001b[34m\u001b[4m[상세보기]\u001b[0m`;
-        const hiddenUrl = `\u001b[8m${dataUrl}\u001b[0m`;
-        result.push(
-          `${indent}${prefix}${node.name}(${args})`,
-          `${indent}${prefix}${visibleLink}${hiddenUrl}`
-        );
+        result.push(`${indent}${prefix}${node.name}(${args})`, dataUrl);
       }
       // 브라우저 환경
       else {
