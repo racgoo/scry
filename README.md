@@ -3,7 +3,7 @@
 # **JavaScript/TypeScript function call and execution flow tracking debugging tools**
 
 <div align="center">
-  <img src="https://img.shields.io/badge/version-0.0.31-blue.svg" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-0.0.34-blue.svg" alt="Version"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/>
 </div>
