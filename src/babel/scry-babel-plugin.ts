@@ -1,11 +1,42 @@
 import * as babel from "@babel/core";
-import UUID from "@utils/uuid";
 
 const processedNodes = new WeakSet();
+const ENV_MODE = process.env.NODE_ENV;
 
 function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
-  // 특수 마커 - 변환 유무 확인용
-  const TRACE_MARKER = "___SCRY_TRACED___";
+  // 마커 변수명 상수로 정의
+  const TRACE_MARKER = "__SCRY_MARK__";
+
+  // 이벤트 발생 함수 생성
+  const createEmitTraceEvent = (detail: any) => {
+    return t.conditionalExpression(
+      t.binaryExpression(
+        "===",
+        t.unaryExpression("typeof", t.identifier("window")),
+        t.stringLiteral("undefined")
+      ),
+      // Node.js
+      t.callExpression(
+        t.memberExpression(t.identifier("process"), t.identifier("emit")),
+        [t.stringLiteral("scry:trace"), detail]
+      ),
+      // Browser
+      t.callExpression(
+        t.memberExpression(
+          t.identifier("globalThis"),
+          t.identifier("dispatchEvent")
+        ),
+        [
+          t.newExpression(t.identifier("CustomEvent"), [
+            t.stringLiteral("scry:trace"),
+            t.objectExpression([
+              t.objectProperty(t.identifier("detail"), detail),
+            ]),
+          ]),
+        ]
+      )
+    );
+  };
 
   return {
     visitor: {
@@ -30,6 +61,10 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
           state: babel.PluginPass
         ) {
           try {
+            if (ENV_MODE !== "development") {
+              return;
+            }
+
             const callee = path.node.callee;
 
             // 이미 변환된 호출 식별 및 건너뛰기
@@ -39,7 +74,17 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
               // 특수 마커 주석 있는지 확인
               path.node.leadingComments?.some((comment) =>
                 comment.value.includes(TRACE_MARKER)
-              )
+              ) ||
+              // 이벤트 리스너 등록 함수 호출인지 체크
+              (t.isMemberExpression(callee) &&
+                t.isIdentifier(callee.object) &&
+                callee.object.name === "process" &&
+                t.isIdentifier(callee.property) &&
+                ["on", "emit"].includes(callee.property.name)) ||
+              // 또는 더 일반적으로 process 관련 호출은 모두 제외
+              (t.isMemberExpression(callee) &&
+                t.isIdentifier(callee.object) &&
+                callee.object.name === "process")
             ) {
               return;
             }
@@ -103,11 +148,46 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
               t.arrowFunctionExpression(
                 [],
                 t.blockStatement([
+                  // 마커 변수 선언 추가
+                  t.variableDeclaration("const", [
+                    t.variableDeclarator(
+                      t.identifier(TRACE_MARKER),
+                      t.booleanLiteral(true)
+                    ),
+                  ]),
                   // traceId 생성
                   t.variableDeclaration("const", [
                     t.variableDeclarator(
                       t.identifier("traceId"),
-                      t.stringLiteral(UUID.generateV4())
+                      t.conditionalExpression(
+                        t.binaryExpression(
+                          "===",
+                          t.unaryExpression(
+                            "typeof",
+                            t.memberExpression(
+                              t.identifier("globalThis"),
+                              t.identifier("__scryCalledCount")
+                            )
+                          ),
+                          t.stringLiteral("undefined")
+                        ),
+                        t.assignmentExpression(
+                          "=",
+                          t.memberExpression(
+                            t.identifier("globalThis"),
+                            t.identifier("__scryCalledCount")
+                          ),
+                          t.numericLiteral(0)
+                        ),
+                        t.updateExpression(
+                          "++",
+                          t.memberExpression(
+                            t.identifier("globalThis"),
+                            t.identifier("__scryCalledCount")
+                          ),
+                          false
+                        )
+                      )
                     ),
                   ]),
 
@@ -125,124 +205,100 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
 
                   // generate 'enter' event
                   t.expressionStatement(
-                    t.callExpression(
-                      t.memberExpression(
-                        t.identifier("globalThis"),
-                        t.identifier("dispatchEvent")
-                      ),
-                      [
-                        t.newExpression(t.identifier("CustomEvent"), [
-                          t.stringLiteral("scry:trace"),
-                          t.objectExpression([
-                            t.objectProperty(
-                              t.identifier("detail"),
-                              t.objectExpression([
-                                t.objectProperty(
-                                  t.identifier("type"),
-                                  t.stringLiteral("enter")
-                                ),
-                                t.objectProperty(
-                                  t.identifier("name"),
-                                  t.stringLiteral(fnName)
-                                ),
-                                t.objectProperty(
-                                  t.identifier("returnValue"),
-                                  t.nullLiteral()
-                                ),
-                                t.objectProperty(
-                                  t.identifier("traceId"),
-                                  t.identifier("traceId")
-                                ),
-                                t.objectProperty(
-                                  t.identifier("source"),
-                                  t.stringLiteral(
-                                    `${state?.filename || ""}:${
-                                      path.node.loc
-                                        ? `${path.node.loc.start.line}:${path.node.loc.start.column}`
-                                        : "unknown"
-                                    }`
-                                  )
-                                ),
-                                t.objectProperty(
-                                  t.identifier("chained"),
-                                  t.booleanLiteral(chained)
-                                ),
-                                t.objectProperty(
-                                  t.identifier("parentTraceId"),
-                                  parentTraceId
-                                    ? t.identifier(parentTraceId)
-                                    : t.nullLiteral()
-                                ),
-                                t.objectProperty(
-                                  t.identifier("args"),
-                                  t.arrayExpression(
-                                    path.node.arguments.map((arg) => {
-                                      if (
-                                        t.isArrowFunctionExpression(arg) ||
-                                        t.isFunctionExpression(arg)
-                                      ) {
-                                        // 함수 위치 정보 추출
-                                        let location = "";
-                                        if (arg.loc) {
-                                          location = `${arg.loc.start.line}:${arg.loc.start.column}-${arg.loc.end.line}:${arg.loc.end.column}`;
-                                        }
+                    createEmitTraceEvent(
+                      t.objectExpression([
+                        t.objectProperty(
+                          t.identifier("type"),
+                          t.stringLiteral("enter")
+                        ),
+                        t.objectProperty(
+                          t.identifier("name"),
+                          t.stringLiteral(fnName)
+                        ),
+                        t.objectProperty(
+                          t.identifier("returnValue"),
+                          t.nullLiteral()
+                        ),
+                        t.objectProperty(
+                          t.identifier("traceId"),
+                          t.identifier("traceId")
+                        ),
+                        t.objectProperty(
+                          t.identifier("source"),
+                          t.stringLiteral(
+                            `${state?.filename || ""}:${
+                              path.node.loc
+                                ? `${path.node.loc.start.line}:${path.node.loc.start.column}`
+                                : "unknown"
+                            }`
+                          )
+                        ),
+                        t.objectProperty(
+                          t.identifier("chained"),
+                          t.booleanLiteral(chained)
+                        ),
+                        t.objectProperty(
+                          t.identifier("parentTraceId"),
+                          parentTraceId
+                            ? t.identifier(parentTraceId)
+                            : t.nullLiteral()
+                        ),
+                        t.objectProperty(
+                          t.identifier("args"),
+                          t.arrayExpression(
+                            path.node.arguments.map((arg) => {
+                              // 함수인 경우
+                              if (
+                                t.isArrowFunctionExpression(arg) ||
+                                t.isFunctionExpression(arg)
+                              ) {
+                                const location = arg.loc
+                                  ? `${arg.loc.start.line}:${arg.loc.start.column}`
+                                  : "unknown";
 
-                                        // 함수 파라미터 정보
-                                        let params = "";
-                                        if (
-                                          arg.params &&
-                                          arg.params.length > 0
-                                        ) {
-                                          params =
-                                            arg.params.length + "개 파라미터";
-                                        }
+                                const name =
+                                  t.isFunctionExpression(arg) && arg.id
+                                    ? arg.id.name
+                                    : "anonymous";
 
-                                        // 함수 이름 (있는 경우)
-                                        let name = "익명";
-                                        if (
-                                          t.isFunctionExpression(arg) &&
-                                          arg.id &&
-                                          arg.id.name
-                                        ) {
-                                          name = arg.id.name;
-                                        }
+                                const params = arg.params
+                                  ? `(${arg.params.length} params)`
+                                  : "";
 
-                                        // 파일 경로 (가능한 경우 state에서 가져옴)
-                                        let filePath = state?.filename || "";
-                                        if (
-                                          filePath &&
-                                          filePath.includes("/")
-                                        ) {
-                                          filePath = filePath
-                                            .split("/")
-                                            .slice(-2)
-                                            .join("/");
-                                        }
+                                const filePath =
+                                  state?.filename
+                                    ?.split("/")
+                                    .slice(-2)
+                                    .join("/") || "";
 
-                                        return t.stringLiteral(
-                                          `함수 ${name} (${filePath}:${location}) ${params}`
-                                        );
-                                      } else if (t.isStringLiteral(arg)) {
-                                        return t.stringLiteral(
-                                          `"${arg.value}"`
-                                        );
-                                      } else if (t.isNumericLiteral(arg)) {
-                                        return t.stringLiteral(`${arg.value}`);
-                                      } else if (t.isObjectExpression(arg)) {
-                                        return t.stringLiteral("{객체}");
-                                      } else {
-                                        return t.stringLiteral(
-                                          `${arg.type || "알 수 없음"}`
-                                        );
-                                      }
-                                    })
-                                  )
-                                ),
-                              ])
-                            ),
-                          ]),
-                        ]),
-                      ]
+                                return t.stringLiteral(
+                                  `[Function: ${name}${params} at ${filePath}:${location}]`
+                                );
+                              }
+                              // 문자열 리터럴
+                              else if (t.isStringLiteral(arg)) {
+                                return t.stringLiteral(arg.value);
+                              }
+                              // 숫자 리터럴
+                              else if (t.isNumericLiteral(arg)) {
+                                return t.numericLiteral(Number(arg.value));
+                              }
+                              // 식별자 (변수)
+                              else if (t.isIdentifier(arg)) {
+                                return t.identifier(arg.name);
+                              }
+                              // 객체 표현식
+                              else if (t.isObjectExpression(arg)) {
+                                return arg;
+                              }
+                              // 기타 타입
+                              else {
+                                return t.stringLiteral(`[${arg.type}]`);
+                              }
+                            })
+                          )
+                        ),
+                      ])
                     )
                   ),
 
@@ -295,124 +351,100 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
 
                   // generate 'exit' event
                   t.expressionStatement(
-                    t.callExpression(
-                      t.memberExpression(
-                        t.identifier("globalThis"),
-                        t.identifier("dispatchEvent")
-                      ),
-                      [
-                        t.newExpression(t.identifier("CustomEvent"), [
-                          t.stringLiteral("scry:trace"),
-                          t.objectExpression([
-                            t.objectProperty(
-                              t.identifier("detail"),
-                              t.objectExpression([
-                                t.objectProperty(
-                                  t.identifier("type"),
-                                  t.stringLiteral("exit")
-                                ),
-                                t.objectProperty(
-                                  t.identifier("name"),
-                                  t.stringLiteral(fnName)
-                                ),
-                                t.objectProperty(
-                                  t.identifier("traceId"),
-                                  t.identifier("traceId")
-                                ),
-                                t.objectProperty(
-                                  t.identifier("source"),
-                                  t.stringLiteral(
-                                    `${state?.filename || ""}:${
-                                      path.node.loc
-                                        ? `${path.node.loc.start.line}:${path.node.loc.start.column}`
-                                        : "unknown"
-                                    }`
-                                  )
-                                ),
-                                t.objectProperty(
-                                  t.identifier("returnValue"),
-                                  t.identifier("returnValue")
-                                ),
-                                t.objectProperty(
-                                  t.identifier("chained"),
-                                  t.booleanLiteral(chained)
-                                ),
-                                t.objectProperty(
-                                  t.identifier("parentTraceId"),
-                                  parentTraceId
-                                    ? t.identifier(parentTraceId)
-                                    : t.nullLiteral()
-                                ),
-                                t.objectProperty(
-                                  t.identifier("args"),
-                                  t.arrayExpression(
-                                    path.node.arguments.map((arg) => {
-                                      if (
-                                        t.isArrowFunctionExpression(arg) ||
-                                        t.isFunctionExpression(arg)
-                                      ) {
-                                        // 함수 위치 정보 추출
-                                        let location = "";
-                                        if (arg.loc) {
-                                          location = `${arg.loc.start.line}:${arg.loc.start.column}-${arg.loc.end.line}:${arg.loc.end.column}`;
-                                        }
+                    createEmitTraceEvent(
+                      t.objectExpression([
+                        t.objectProperty(
+                          t.identifier("type"),
+                          t.stringLiteral("exit")
+                        ),
+                        t.objectProperty(
+                          t.identifier("name"),
+                          t.stringLiteral(fnName)
+                        ),
+                        t.objectProperty(
+                          t.identifier("traceId"),
+                          t.identifier("traceId")
+                        ),
+                        t.objectProperty(
+                          t.identifier("source"),
+                          t.stringLiteral(
+                            `${state?.filename || ""}:${
+                              path.node.loc
+                                ? `${path.node.loc.start.line}:${path.node.loc.start.column}`
+                                : "unknown"
+                            }`
+                          )
+                        ),
+                        t.objectProperty(
+                          t.identifier("returnValue"),
+                          t.identifier("returnValue")
+                        ),
+                        t.objectProperty(
+                          t.identifier("chained"),
+                          t.booleanLiteral(chained)
+                        ),
+                        t.objectProperty(
+                          t.identifier("parentTraceId"),
+                          parentTraceId
+                            ? t.identifier(parentTraceId)
+                            : t.nullLiteral()
+                        ),
+                        t.objectProperty(
+                          t.identifier("args"),
+                          t.arrayExpression(
+                            path.node.arguments.map((arg) => {
+                              // 함수인 경우
+                              if (
+                                t.isArrowFunctionExpression(arg) ||
+                                t.isFunctionExpression(arg)
+                              ) {
+                                const location = arg.loc
+                                  ? `${arg.loc.start.line}:${arg.loc.start.column}`
+                                  : "unknown";
 
-                                        // 함수 파라미터 정보
-                                        let params = "";
-                                        if (
-                                          arg.params &&
-                                          arg.params.length > 0
-                                        ) {
-                                          params =
-                                            arg.params.length + "개 파라미터";
-                                        }
+                                const name =
+                                  t.isFunctionExpression(arg) && arg.id
+                                    ? arg.id.name
+                                    : "anonymous";
 
-                                        // 함수 이름 (있는 경우)
-                                        let name = "익명";
-                                        if (
-                                          t.isFunctionExpression(arg) &&
-                                          arg.id &&
-                                          arg.id.name
-                                        ) {
-                                          name = arg.id.name;
-                                        }
+                                const params = arg.params
+                                  ? `(${arg.params.length} params)`
+                                  : "";
 
-                                        // 파일 경로 (가능한 경우 state에서 가져옴)
-                                        let filePath = state?.filename || "";
-                                        if (
-                                          filePath &&
-                                          filePath.includes("/")
-                                        ) {
-                                          filePath = filePath
-                                            .split("/")
-                                            .slice(-2)
-                                            .join("/");
-                                        }
+                                const filePath =
+                                  state?.filename
+                                    ?.split("/")
+                                    .slice(-2)
+                                    .join("/") || "";
 
-                                        return t.stringLiteral(
-                                          `함수 ${name} (${filePath}:${location}) ${params}`
-                                        );
-                                      } else if (t.isStringLiteral(arg)) {
-                                        return t.stringLiteral(
-                                          `"${arg.value}"`
-                                        );
-                                      } else if (t.isNumericLiteral(arg)) {
-                                        return t.stringLiteral(`${arg.value}`);
-                                      } else if (t.isObjectExpression(arg)) {
-                                        return t.stringLiteral("{객체}");
-                                      } else {
-                                        return t.stringLiteral(
-                                          `${arg.type || "알 수 없음"}`
-                                        );
-                                      }
-                                    })
-                                  )
-                                ),
-                              ])
-                            ),
-                          ]),
-                        ]),
-                      ]
+                                return t.stringLiteral(
+                                  `[Function: ${name}${params} at ${filePath}:${location}]`
+                                );
+                              }
+                              // 문자열 리터럴
+                              else if (t.isStringLiteral(arg)) {
+                                return t.stringLiteral(arg.value);
+                              }
+                              // 숫자 리터럴
+                              else if (t.isNumericLiteral(arg)) {
+                                return t.numericLiteral(Number(arg.value));
+                              }
+                              // 식별자 (변수)
+                              else if (t.isIdentifier(arg)) {
+                                return t.identifier(arg.name);
+                              }
+                              // 객체 표현식
+                              else if (t.isObjectExpression(arg)) {
+                                return arg;
+                              }
+                              // 기타 타입
+                              else {
+                                return t.stringLiteral(`[${arg.type}]`);
+                              }
+                            })
+                          )
+                        ),
+                      ])
                     )
                   ),
 

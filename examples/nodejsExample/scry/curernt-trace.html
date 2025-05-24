@@ -1,0 +1,122 @@
+
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Scry Trace Results</title>
+          <style>
+            body { 
+              font-family: monospace; 
+              padding: 20px;
+              background: #f5f5f5;
+            }
+            .trace-list {
+              display: flex;
+              flex-direction: column;
+              gap: 10px;
+            }
+            .trace-item {
+              border: 1px solid #ccc;
+              padding: 15px;
+              background: white;
+              border-radius: 8px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              cursor: pointer;
+              transition: all 0.2s;
+            }
+            .trace-item:hover {
+              transform: translateY(-2px);
+              box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            }
+            .trace-name {
+              font-weight: bold;
+              color: #333;
+            }
+            .modal {
+              display: none;
+              position: fixed;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              background: rgba(0, 0, 0, 0.5);
+            }
+            .modal-content {
+              position: fixed;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              width: 90%;
+              height: 90%;
+              background: white;
+              border-radius: 8px;
+              box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            .modal iframe {
+              width: 100%;
+              height: 100%;
+              border: none;
+              border-radius: 8px;
+            }
+            .close-btn {
+              position: absolute;
+              right: 10px;
+              top: 10px;
+              cursor: pointer;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>p@racgoo/scry] Trace Results</h1>
+          <div class="trace-list">
+            
+              <div class="trace-item" onclick="showModal('data:text/html;base64,CiAgICAgIDwhRE9DVFlQRSBodG1sPgogICAgICA8aHRtbD4KICAgICAgICA8aGVhZD4KICAgICAgICAgIDx0aXRsZT5UcmFjZSBSZXN1bHQgLSBsb2c8L3RpdGxlPgogICAgICAgICAgPHN0eWxlPgogICAgICAgICAgICBib2R5IHsgCiAgICAgICAgICAgICAgZm9udC1mYW1pbHk6IG1vbm9zcGFjZTsgCiAgICAgICAgICAgICAgcGFkZGluZzogMjBweDsKICAgICAgICAgICAgICBiYWNrZ3JvdW5kOiAjZjVmNWY1OwogICAgICAgICAgICB9CiAgICAgICAgICAgIC50cmFjZS1pbmZvIHsgCiAgICAgICAgICAgICAgYm9yZGVyOiAxcHggc29saWQgI2NjYzsgCiAgICAgICAgICAgICAgcGFkZGluZzogMjBweDsKICAgICAgICAgICAgICBtYXJnaW46IDIwcHggMDsKICAgICAgICAgICAgICBiYWNrZ3JvdW5kOiB3aGl0ZTsKICAgICAgICAgICAgICBib3JkZXItcmFkaXVzOiA4cHg7CiAgICAgICAgICAgICAgYm94LXNoYWRvdzogMCAycHggNHB4IHJnYmEoMCwwLDAsMC4xKTsKICAgICAgICAgICAgfQogICAgICAgICAgICAuYXJncyB7IAogICAgICAgICAgICAgIGNvbG9yOiAjNjY2OwogICAgICAgICAgICAgIG1hcmdpbjogMTBweCAwOwogICAgICAgICAgICB9CiAgICAgICAgICAgIC5yZXR1cm4geyAKICAgICAgICAgICAgICBjb2xvcjogIzAwNjZjYzsKICAgICAgICAgICAgICBtYXJnaW46IDEwcHggMDsKICAgICAgICAgICAgfQogICAgICAgICAgICAuc291cmNlIHsgCiAgICAgICAgICAgICAgY29sb3I6ICM4ODg7CiAgICAgICAgICAgICAgbWFyZ2luOiAxMHB4IDA7CiAgICAgICAgICAgICAgZm9udC1zaXplOiAwLjllbTsKICAgICAgICAgICAgfQogICAgICAgICAgICBwcmUgewogICAgICAgICAgICAgIGJhY2tncm91bmQ6ICNmOGY4Zjg7CiAgICAgICAgICAgICAgcGFkZGluZzogMTBweDsKICAgICAgICAgICAgICBib3JkZXItcmFkaXVzOiA0cHg7CiAgICAgICAgICAgIH0KICAgICAgICAgIDwvc3R5bGU+CiAgICAgICAgPC9oZWFkPgogICAgICAgIDxib2R5PgogICAgICAgICAgPGRpdiBjbGFzcz0idHJhY2UtaW5mbyI+CiAgICAgICAgICAgIDxoMj5sb2c8L2gyPgogICAgICAgICAgICA8ZGl2IGNsYXNzPSJhcmdzIj4KICAgICAgICAgICAgICA8c3Ryb25nPkFyZ3VtZW50czo8L3N0cm9uZz4KICAgICAgICAgICAgICA8cHJlPlsKICAiW0NhbGxFeHByZXNzaW9uXSIKXTwvcHJlPgogICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgPGRpdiBjbGFzcz0icmV0dXJuIj4KICAgICAgICAgICAgICA8c3Ryb25nPlJldHVybiBWYWx1ZTo8L3N0cm9uZz4KICAgICAgICAgICAgICA8cHJlPnVuZGVmaW5lZDwvcHJlPgogICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgPGRpdiBjbGFzcz0ic291cmNlIj4KICAgICAgICAgICAgICA8c3Ryb25nPlNvdXJjZTo8L3N0cm9uZz4gL1VzZXJzL3JhY2dvby9Eb2N1bWVudHMvdHJhY2VUZXN0L25vZGVqc0V4YW1wbGUvc3JjL2luZGV4LmpzOjE4OjIKICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIAogICAgICAgICAgPC9kaXY+CiAgICAgICAgPC9ib2R5PgogICAgICA8L2h0bWw+CiAgICA=')" >
+                <span>log("[CallExpression]")</span>
+              </div>
+            
+              <div class="trace-item" onclick="showModal('data:text/html;base64,CiAgICAgIDwhRE9DVFlQRSBodG1sPgogICAgICA8aHRtbD4KICAgICAgICA8aGVhZD4KICAgICAgICAgIDx0aXRsZT5UcmFjZSBSZXN1bHQgLSBwcm9jZXNzVGV4dDwvdGl0bGU+CiAgICAgICAgICA8c3R5bGU+CiAgICAgICAgICAgIGJvZHkgeyAKICAgICAgICAgICAgICBmb250LWZhbWlseTogbW9ub3NwYWNlOyAKICAgICAgICAgICAgICBwYWRkaW5nOiAyMHB4OwogICAgICAgICAgICAgIGJhY2tncm91bmQ6ICNmNWY1ZjU7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgLnRyYWNlLWluZm8geyAKICAgICAgICAgICAgICBib3JkZXI6IDFweCBzb2xpZCAjY2NjOyAKICAgICAgICAgICAgICBwYWRkaW5nOiAyMHB4OwogICAgICAgICAgICAgIG1hcmdpbjogMjBweCAwOwogICAgICAgICAgICAgIGJhY2tncm91bmQ6IHdoaXRlOwogICAgICAgICAgICAgIGJvcmRlci1yYWRpdXM6IDhweDsKICAgICAgICAgICAgICBib3gtc2hhZG93OiAwIDJweCA0cHggcmdiYSgwLDAsMCwwLjEpOwogICAgICAgICAgICB9CiAgICAgICAgICAgIC5hcmdzIHsgCiAgICAgICAgICAgICAgY29sb3I6ICM2NjY7CiAgICAgICAgICAgICAgbWFyZ2luOiAxMHB4IDA7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgLnJldHVybiB7IAogICAgICAgICAgICAgIGNvbG9yOiAjMDA2NmNjOwogICAgICAgICAgICAgIG1hcmdpbjogMTBweCAwOwogICAgICAgICAgICB9CiAgICAgICAgICAgIC5zb3VyY2UgeyAKICAgICAgICAgICAgICBjb2xvcjogIzg4ODsKICAgICAgICAgICAgICBtYXJnaW46IDEwcHggMDsKICAgICAgICAgICAgICBmb250LXNpemU6IDAuOWVtOwogICAgICAgICAgICB9CiAgICAgICAgICAgIHByZSB7CiAgICAgICAgICAgICAgYmFja2dyb3VuZDogI2Y4ZjhmODsKICAgICAgICAgICAgICBwYWRkaW5nOiAxMHB4OwogICAgICAgICAgICAgIGJvcmRlci1yYWRpdXM6IDRweDsKICAgICAgICAgICAgfQogICAgICAgICAgPC9zdHlsZT4KICAgICAgICA8L2hlYWQ+CiAgICAgICAgPGJvZHk+CiAgICAgICAgICA8ZGl2IGNsYXNzPSJ0cmFjZS1pbmZvIj4KICAgICAgICAgICAgPGgyPnByb2Nlc3NUZXh0PC9oMj4KICAgICAgICAgICAgPGRpdiBjbGFzcz0iYXJncyI+CiAgICAgICAgICAgICAgPHN0cm9uZz5Bcmd1bWVudHM6PC9zdHJvbmc+CiAgICAgICAgICAgICAgPHByZT5bCiAgIltDYWxsRXhwcmVzc2lvbl0iCl08L3ByZT4KICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIDxkaXYgY2xhc3M9InJldHVybiI+CiAgICAgICAgICAgICAgPHN0cm9uZz5SZXR1cm4gVmFsdWU6PC9zdHJvbmc+CiAgICAgICAgICAgICAgPHByZT4iSEVMTE8sIFdPUkxEISEhISI8L3ByZT4KICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIDxkaXYgY2xhc3M9InNvdXJjZSI+CiAgICAgICAgICAgICAgPHN0cm9uZz5Tb3VyY2U6PC9zdHJvbmc+IC9Vc2Vycy9yYWNnb28vRG9jdW1lbnRzL3RyYWNlVGVzdC9ub2RlanNFeGFtcGxlL3NyYy9pbmRleC5qczoxODoxNAogICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgCiAgICAgICAgICA8L2Rpdj4KICAgICAgICA8L2JvZHk+CiAgICAgIDwvaHRtbD4KICAgIA==')" >
+                <span>ㅤㅤ└─ processText("[CallExpression]")</span>
+              </div>
+            
+              <div class="trace-item" onclick="showModal('data:text/html;base64,CiAgICAgIDwhRE9DVFlQRSBodG1sPgogICAgICA8aHRtbD4KICAgICAgICA8aGVhZD4KICAgICAgICAgIDx0aXRsZT5UcmFjZSBSZXN1bHQgLSBhZGRFeGNsYW1hdGlvbjwvdGl0bGU+CiAgICAgICAgICA8c3R5bGU+CiAgICAgICAgICAgIGJvZHkgeyAKICAgICAgICAgICAgICBmb250LWZhbWlseTogbW9ub3NwYWNlOyAKICAgICAgICAgICAgICBwYWRkaW5nOiAyMHB4OwogICAgICAgICAgICAgIGJhY2tncm91bmQ6ICNmNWY1ZjU7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgLnRyYWNlLWluZm8geyAKICAgICAgICAgICAgICBib3JkZXI6IDFweCBzb2xpZCAjY2NjOyAKICAgICAgICAgICAgICBwYWRkaW5nOiAyMHB4OwogICAgICAgICAgICAgIG1hcmdpbjogMjBweCAwOwogICAgICAgICAgICAgIGJhY2tncm91bmQ6IHdoaXRlOwogICAgICAgICAgICAgIGJvcmRlci1yYWRpdXM6IDhweDsKICAgICAgICAgICAgICBib3gtc2hhZG93OiAwIDJweCA0cHggcmdiYSgwLDAsMCwwLjEpOwogICAgICAgICAgICB9CiAgICAgICAgICAgIC5hcmdzIHsgCiAgICAgICAgICAgICAgY29sb3I6ICM2NjY7CiAgICAgICAgICAgICAgbWFyZ2luOiAxMHB4IDA7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgLnJldHVybiB7IAogICAgICAgICAgICAgIGNvbG9yOiAjMDA2NmNjOwogICAgICAgICAgICAgIG1hcmdpbjogMTBweCAwOwogICAgICAgICAgICB9CiAgICAgICAgICAgIC5zb3VyY2UgeyAKICAgICAgICAgICAgICBjb2xvcjogIzg4ODsKICAgICAgICAgICAgICBtYXJnaW46IDEwcHggMDsKICAgICAgICAgICAgICBmb250LXNpemU6IDAuOWVtOwogICAgICAgICAgICB9CiAgICAgICAgICAgIHByZSB7CiAgICAgICAgICAgICAgYmFja2dyb3VuZDogI2Y4ZjhmODsKICAgICAgICAgICAgICBwYWRkaW5nOiAxMHB4OwogICAgICAgICAgICAgIGJvcmRlci1yYWRpdXM6IDRweDsKICAgICAgICAgICAgfQogICAgICAgICAgPC9zdHlsZT4KICAgICAgICA8L2hlYWQ+CiAgICAgICAgPGJvZHk+CiAgICAgICAgICA8ZGl2IGNsYXNzPSJ0cmFjZS1pbmZvIj4KICAgICAgICAgICAgPGgyPmFkZEV4Y2xhbWF0aW9uPC9oMj4KICAgICAgICAgICAgPGRpdiBjbGFzcz0iYXJncyI+CiAgICAgICAgICAgICAgPHN0cm9uZz5Bcmd1bWVudHM6PC9zdHJvbmc+CiAgICAgICAgICAgICAgPHByZT5bCiAgIltDYWxsRXhwcmVzc2lvbl0iCl08L3ByZT4KICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIDxkaXYgY2xhc3M9InJldHVybiI+CiAgICAgICAgICAgICAgPHN0cm9uZz5SZXR1cm4gVmFsdWU6PC9zdHJvbmc+CiAgICAgICAgICAgICAgPHByZT4iSGVsbG8sIFdvcmxkISEhISI8L3ByZT4KICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIDxkaXYgY2xhc3M9InNvdXJjZSI+CiAgICAgICAgICAgICAgPHN0cm9uZz5Tb3VyY2U6PC9zdHJvbmc+IC9Vc2Vycy9yYWNnb28vRG9jdW1lbnRzL3RyYWNlVGVzdC9ub2RlanNFeGFtcGxlL3NyYy9pbmRleC5qczoxODoyNgogICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgCiAgICAgICAgICA8L2Rpdj4KICAgICAgICA8L2JvZHk+CiAgICAgIDwvaHRtbD4KICAgIA==')" >
+                <span>ㅤㅤㅤㅤ└─ addExclamation("[CallExpression]")</span>
+              </div>
+            
+              <div class="trace-item" onclick="showModal('data:text/html;base64,CiAgICAgIDwhRE9DVFlQRSBodG1sPgogICAgICA8aHRtbD4KICAgICAgICA8aGVhZD4KICAgICAgICAgIDx0aXRsZT5UcmFjZSBSZXN1bHQgLSBncmVldGluZzwvdGl0bGU+CiAgICAgICAgICA8c3R5bGU+CiAgICAgICAgICAgIGJvZHkgeyAKICAgICAgICAgICAgICBmb250LWZhbWlseTogbW9ub3NwYWNlOyAKICAgICAgICAgICAgICBwYWRkaW5nOiAyMHB4OwogICAgICAgICAgICAgIGJhY2tncm91bmQ6ICNmNWY1ZjU7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgLnRyYWNlLWluZm8geyAKICAgICAgICAgICAgICBib3JkZXI6IDFweCBzb2xpZCAjY2NjOyAKICAgICAgICAgICAgICBwYWRkaW5nOiAyMHB4OwogICAgICAgICAgICAgIG1hcmdpbjogMjBweCAwOwogICAgICAgICAgICAgIGJhY2tncm91bmQ6IHdoaXRlOwogICAgICAgICAgICAgIGJvcmRlci1yYWRpdXM6IDhweDsKICAgICAgICAgICAgICBib3gtc2hhZG93OiAwIDJweCA0cHggcmdiYSgwLDAsMCwwLjEpOwogICAgICAgICAgICB9CiAgICAgICAgICAgIC5hcmdzIHsgCiAgICAgICAgICAgICAgY29sb3I6ICM2NjY7CiAgICAgICAgICAgICAgbWFyZ2luOiAxMHB4IDA7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgLnJldHVybiB7IAogICAgICAgICAgICAgIGNvbG9yOiAjMDA2NmNjOwogICAgICAgICAgICAgIG1hcmdpbjogMTBweCAwOwogICAgICAgICAgICB9CiAgICAgICAgICAgIC5zb3VyY2UgeyAKICAgICAgICAgICAgICBjb2xvcjogIzg4ODsKICAgICAgICAgICAgICBtYXJnaW46IDEwcHggMDsKICAgICAgICAgICAgICBmb250LXNpemU6IDAuOWVtOwogICAgICAgICAgICB9CiAgICAgICAgICAgIHByZSB7CiAgICAgICAgICAgICAgYmFja2dyb3VuZDogI2Y4ZjhmODsKICAgICAgICAgICAgICBwYWRkaW5nOiAxMHB4OwogICAgICAgICAgICAgIGJvcmRlci1yYWRpdXM6IDRweDsKICAgICAgICAgICAgfQogICAgICAgICAgPC9zdHlsZT4KICAgICAgICA8L2hlYWQ+CiAgICAgICAgPGJvZHk+CiAgICAgICAgICA8ZGl2IGNsYXNzPSJ0cmFjZS1pbmZvIj4KICAgICAgICAgICAgPGgyPmdyZWV0aW5nPC9oMj4KICAgICAgICAgICAgPGRpdiBjbGFzcz0iYXJncyI+CiAgICAgICAgICAgICAgPHN0cm9uZz5Bcmd1bWVudHM6PC9zdHJvbmc+CiAgICAgICAgICAgICAgPHByZT5bCiAgIldvcmxkIgpdPC9wcmU+CiAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICA8ZGl2IGNsYXNzPSJyZXR1cm4iPgogICAgICAgICAgICAgIDxzdHJvbmc+UmV0dXJuIFZhbHVlOjwvc3Ryb25nPgogICAgICAgICAgICAgIDxwcmU+IkhlbGxvLCBXb3JsZCEiPC9wcmU+CiAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICA8ZGl2IGNsYXNzPSJzb3VyY2UiPgogICAgICAgICAgICAgIDxzdHJvbmc+U291cmNlOjwvc3Ryb25nPiAvVXNlcnMvcmFjZ29vL0RvY3VtZW50cy90cmFjZVRlc3Qvbm9kZWpzRXhhbXBsZS9zcmMvaW5kZXguanM6MTg6NDEKICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIAogICAgICAgICAgPC9kaXY+CiAgICAgICAgPC9ib2R5PgogICAgICA8L2h0bWw+CiAgICA=')" >
+                <span>ㅤㅤㅤㅤㅤㅤ└─ greeting("World")</span>
+              </div>
+            
+              <div class="trace-item" onclick="showModal('data:text/html;base64,CiAgICAgIDwhRE9DVFlQRSBodG1sPgogICAgICA8aHRtbD4KICAgICAgICA8aGVhZD4KICAgICAgICAgIDx0aXRsZT5UcmFjZSBSZXN1bHQgLSB0b1VwcGVyQ2FzZTwvdGl0bGU+CiAgICAgICAgICA8c3R5bGU+CiAgICAgICAgICAgIGJvZHkgeyAKICAgICAgICAgICAgICBmb250LWZhbWlseTogbW9ub3NwYWNlOyAKICAgICAgICAgICAgICBwYWRkaW5nOiAyMHB4OwogICAgICAgICAgICAgIGJhY2tncm91bmQ6ICNmNWY1ZjU7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgLnRyYWNlLWluZm8geyAKICAgICAgICAgICAgICBib3JkZXI6IDFweCBzb2xpZCAjY2NjOyAKICAgICAgICAgICAgICBwYWRkaW5nOiAyMHB4OwogICAgICAgICAgICAgIG1hcmdpbjogMjBweCAwOwogICAgICAgICAgICAgIGJhY2tncm91bmQ6IHdoaXRlOwogICAgICAgICAgICAgIGJvcmRlci1yYWRpdXM6IDhweDsKICAgICAgICAgICAgICBib3gtc2hhZG93OiAwIDJweCA0cHggcmdiYSgwLDAsMCwwLjEpOwogICAgICAgICAgICB9CiAgICAgICAgICAgIC5hcmdzIHsgCiAgICAgICAgICAgICAgY29sb3I6ICM2NjY7CiAgICAgICAgICAgICAgbWFyZ2luOiAxMHB4IDA7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgLnJldHVybiB7IAogICAgICAgICAgICAgIGNvbG9yOiAjMDA2NmNjOwogICAgICAgICAgICAgIG1hcmdpbjogMTBweCAwOwogICAgICAgICAgICB9CiAgICAgICAgICAgIC5zb3VyY2UgeyAKICAgICAgICAgICAgICBjb2xvcjogIzg4ODsKICAgICAgICAgICAgICBtYXJnaW46IDEwcHggMDsKICAgICAgICAgICAgICBmb250LXNpemU6IDAuOWVtOwogICAgICAgICAgICB9CiAgICAgICAgICAgIHByZSB7CiAgICAgICAgICAgICAgYmFja2dyb3VuZDogI2Y4ZjhmODsKICAgICAgICAgICAgICBwYWRkaW5nOiAxMHB4OwogICAgICAgICAgICAgIGJvcmRlci1yYWRpdXM6IDRweDsKICAgICAgICAgICAgfQogICAgICAgICAgPC9zdHlsZT4KICAgICAgICA8L2hlYWQ+CiAgICAgICAgPGJvZHk+CiAgICAgICAgICA8ZGl2IGNsYXNzPSJ0cmFjZS1pbmZvIj4KICAgICAgICAgICAgPGgyPnRvVXBwZXJDYXNlPC9oMj4KICAgICAgICAgICAgPGRpdiBjbGFzcz0iYXJncyI+CiAgICAgICAgICAgICAgPHN0cm9uZz5Bcmd1bWVudHM6PC9zdHJvbmc+CiAgICAgICAgICAgICAgPHByZT5bXTwvcHJlPgogICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgPGRpdiBjbGFzcz0icmV0dXJuIj4KICAgICAgICAgICAgICA8c3Ryb25nPlJldHVybiBWYWx1ZTo8L3N0cm9uZz4KICAgICAgICAgICAgICA8cHJlPiJIRUxMTywgV09STEQhISEhIjwvcHJlPgogICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgPGRpdiBjbGFzcz0ic291cmNlIj4KICAgICAgICAgICAgICA8c3Ryb25nPlNvdXJjZTo8L3N0cm9uZz4gL1VzZXJzL3JhY2dvby9Eb2N1bWVudHMvdHJhY2VUZXN0L25vZGVqc0V4YW1wbGUvc3JjL2luZGV4LmpzOjEzOjkKICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIAogICAgICAgICAgPC9kaXY+CiAgICAgICAgPC9ib2R5PgogICAgICA8L2h0bWw+CiAgICA=')" >
+                <span>ㅤㅤㅤㅤ└─ toUpperCase()</span>
+              </div>
+            
+          </div>
+
+          <div id="modal" class="modal" onclick="hideModal(event)">
+            <div class="modal-content">
+              <iframe id="modal-iframe"></iframe>
+            </div>
+          </div>
+
+          <script>
+            function showModal(url) {
+              document.getElementById('modal-iframe').src = url;
+              document.getElementById('modal').style.display = 'block';
+            }
+
+            function hideModal(event) {
+              if (event.target.className === 'modal') {
+                document.getElementById('modal').style.display = 'none';
+                document.getElementById('modal-iframe').src = '';
+              }
+            }
+
+            document.addEventListener('keydown', (e) => {
+              if (e.key === 'Escape') {
+                document.getElementById('modal').style.display = 'none';
+                document.getElementById('modal-iframe').src = '';
+              }
+            });
+          </script>
+        </body>
+      </html>
+    

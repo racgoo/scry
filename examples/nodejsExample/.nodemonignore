@@ -1,0 +1,17 @@
+# 빌드 결과물 무시
+dist/
+build/
+
+# 버전 관리 시스템
+.git/
+.svn/
+
+# 의존성 모듈
+node_modules/
+
+# 기타 파일
+*.log
+*.html
+*.css
+*.json
+*.test.js 

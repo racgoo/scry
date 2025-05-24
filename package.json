@@ -1,9 +1,13 @@
 {
   "name": "@racgoo/scry",
-  "version": "0.0.25",
+  "version": "0.0.28",
   "description": "Trace your code with ease",
-  "main": "dist/index.js",
+  "main": "./dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "type": "commonjs",
   "files": [
     "dist",
     "README.md",
@@ -44,8 +48,5 @@
     "ts-node": "^10.9.2",
     "tsc-alias": "^1.8.16",
     "typescript": "^5.3.3"
-  },
-  "dependencies": {
-    "uuid": "^11.1.0"
   }
 }
