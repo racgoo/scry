@@ -29,7 +29,28 @@ Scry helps you clearly understand complex code flow and analyze relationships be
 
 - Works seamlessly in both JavaScript and TypeScript (Node.js and browser environments)
 
-- Improved error messaging and debugging experience (currently under development)
+---
+
+## Trace Result Sample
+
+- ### browser sample
+
+  #### TraceList(Console)
+  <img width="1412" alt="스크린샷 2025-05-24 오후 6 12 39" src="https://github.com/user-attachments/assets/43cb7122-6bca-42b3-b82f-19784ce47eba" />
+
+  #### TraceDetail(WebUI)
+  <img width="1432" alt="스크린샷 2025-05-24 오후 6 05 40" src="https://github.com/user-attachments/assets/d7f664bc-0c5a-4bef-91f4-1e698487149d" />
+
+- ### nodejs sample
+
+  ##### TraceList(HTML file)
+  Save as static file -> project-root/scry/current-trace.html
+
+  #### TraceList(WebUI)
+  <img width="1440" alt="스크린샷 2025-05-24 오후 6 04 18" src="https://github.com/user-attachments/assets/fd447cbc-73ce-4dd4-945c-739b7cf050c9" />
+
+  #### TraceDetail(WebUI)
+  <img width="1437" alt="스크린샷 2025-05-24 오후 6 04 36" src="https://github.com/user-attachments/assets/c56215e7-59a0-4f38-a0d0-c2758c80a69d" />
 
 ---
 
@@ -54,8 +75,11 @@ Add the following plugin to your babel.config.js or .babelrc file
 ```jsx
 import { scryBabelPlugin } from "@racgoo/scry";
 ⚠️ Plugin setup may differ depending on the bundler you're using. ⚠️
+If setting things up feels difficult, please refer to the "examples" in the GitHub repository.
 
-#vite example
+----------------------------------------------------------------------
+
+#vite example (vite.config.js)
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { scryBabelPlugin } from "@racgoo/scry";
@@ -72,6 +96,17 @@ export default defineConfig({
     }),
   ],
 });
+
+----------------------------------------------------------------------
+
+#nodejs example (babel.config.js)
+import { scryBabelPlugin } from "@racgoo/scry";
+
+export default {
+  presets: [],
+  plugins: [scryBabelPlugin],
+};
+
 
 ```
 
@@ -111,9 +146,9 @@ Further improvements are underway to better validate and track function paramete
 
 Tracing for `asynchronous functions` is not yet implemented. Development is currently in progress.
 
-#### Node.js Runtime Support
+#### Improved error messaging
 
-Full support for tracing in Node.js environments is under active development.
+error handling and clearer error messages are currently under development.😅
 
 ---
 
