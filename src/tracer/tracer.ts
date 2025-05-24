@@ -37,7 +37,7 @@ class Tracer {
   public start() {
     if (this.isTracing) {
       Output.print(
-        "이미 추적이 진행 중입니다. Tracer.end()를 먼저 호출해주세요."
+        "Tracing is already started. Please call Tracer.end() first."
       );
       return;
     }
@@ -52,14 +52,12 @@ class Tracer {
       globalThis.addEventListener("scry:trace", this.boundOnTrace);
     }
 
-    Output.print("추적 시작");
+    Output.print("Tracer is started");
   }
 
   end() {
     if (!this.isTracing) {
-      Output.print(
-        "추적이 진행 중이지 않습니다. Tracer.start()를 먼저 호출해주세요."
-      );
+      Output.print("Tracing is not started. Please call Tracer.start() first.");
       return;
     }
     this.isTracing = false;
@@ -73,7 +71,7 @@ class Tracer {
 
     this.duration = Date.now() - this.duration;
     const tree = this.makeTree(this.details);
-    Output.print("추적 종료");
+    Output.print("Tracing is ended");
     const displayResult = this.makeConsoleResult(tree);
     if (this.isNodeJS()) {
       const linkList: [string, string][] = [];

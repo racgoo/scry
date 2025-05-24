@@ -5,12 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "NODE_ENV=development vite",
-    "reLink": "npm unlink @racgoo/scry && npm link @racgoo/scry",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@racgoo/scry": "^0.0.28",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
