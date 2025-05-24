@@ -1,13 +1,17 @@
 # 🔍 Scry
 
+# **JavaScript/TypeScript function call and execution flow tracking debugging tools**
+
 <div align="center">
-<img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Version"/>
-<img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
-<img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/>
-
-## **JavaScript/TypeScript function call and execution flow tracking debugging tools**
-
+  <img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Version"/>
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/>
 </div>
+
+<div align="center">
+  <img width="320" alt="Scry" src="https://github.com/user-attachments/assets/d6ca7480-658b-484a-8a51-00edbcb082c7" />
+</div>
+
 
 ---
 
