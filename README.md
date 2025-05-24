@@ -27,7 +27,9 @@ Scry helps you clearly understand complex code flow and analyze relationships be
 
 - Automatic tracking of function names and call stacks
 
-- Works seamlessly in both JavaScript and TypeScript (Node.js and browser environments)
+- Works seamlessly in both JavaScript and TypeScript (Node.js and Browser environments).
+In the `Browser`, trace results are displayed directly in the `console` with a clickable link to view them in a new tab.
+In `Node.js`, results are saved as a `current-trace.html` file in the scry folder at the project root, which you can open in a browser to view the trace.
 
 ---
 
