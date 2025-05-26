@@ -1,119 +1,145 @@
 import Output from "@utils/output";
 import Format from "@tracer/format";
+import { TRACE_EVENT_NAME } from "@babel/scry.constant";
+import Transformer from "@utils/transformer";
+import Environment from "@utils/enviroment";
 
+//Tracer class. for single instance.
 class Tracer {
   private isTracing = false;
+  //Trace details(like stack trace)
   private details: Detail[] = [];
+  private timestamp: number = 0;
+  //Trace duration(not used)
   private duration: number = 0;
-  // 바인딩된 함수를 정적 속성으로 저장
+  //Bind onTrace function(for static method call)
   private boundOnTrace = this.onTrace.bind(this) as EventListener;
 
-  // 전역 이벤트 이미터 생성
-
-  private isNodeJS(): boolean {
-    return typeof window === "undefined" && typeof process !== "undefined";
-  }
-
+  //Start tracing
   public start() {
     if (this.isTracing) {
-      Output.print(
+      Output.printError(
         "Tracing is already started. Please call Tracer.end() first."
       );
       return;
     }
     this.isTracing = true;
-    this.duration = Date.now();
 
-    // 환경에 따라 다른 이벤트 리스너 등록
-    if (this.isNodeJS()) {
-      process.on("scry:trace", this.boundOnTrace);
+    //Init start time
+    const now = Date.now();
+    this.timestamp = now;
+
+    //Register event listener according to the execution environment
+    if (Environment.isNodeJS()) {
+      //Nodejs use process event
+      process.on(TRACE_EVENT_NAME, this.boundOnTrace);
     } else {
-      // 브라우저 환경에서는 addEventListener 사용
-      globalThis.addEventListener("scry:trace", this.boundOnTrace);
+      //Browser use globalThis event
+      globalThis.addEventListener(TRACE_EVENT_NAME, this.boundOnTrace);
     }
-
+    Output.printDivider();
     Output.print("Tracer is started");
   }
 
+  //end tracing
   end() {
     if (!this.isTracing) {
-      Output.print("Tracing is not started. Please call Tracer.start() first.");
+      Output.printError(
+        "Tracing is not started. Please call Tracer.start() first."
+      );
       return;
     }
     this.isTracing = false;
 
-    // 환경에 따라 다른 이벤트 리스너 제거
-    if (this.isNodeJS()) {
-      process.removeListener("scry:trace", this.boundOnTrace);
+    //Remove event listener according to the execution environment
+    if (Environment.isNodeJS()) {
+      //Nodejs use process event
+      process.removeListener(TRACE_EVENT_NAME, this.boundOnTrace);
     } else {
-      globalThis.removeEventListener("scry:trace", this.boundOnTrace);
+      //Browser use globalThis event
+      globalThis.removeEventListener(TRACE_EVENT_NAME, this.boundOnTrace);
     }
 
-    this.duration = Date.now() - this.duration;
-    const tree = this.makeTree(this.details);
+    //Update duration
+    this.duration = Date.now() - this.timestamp;
+
     Output.print("Tracing is ended");
-    const displayResult = this.makeConsoleResult(tree);
-    if (this.isNodeJS()) {
-      const linkList: [string, string][] = [];
-      for (let i = 0; i < displayResult.length; i += 2) {
-        linkList.push([displayResult[i], displayResult[i + 1]]);
-      }
-      const htmlRoot = Format.generateHtmlRoot(linkList);
+
+    //Make trace tree(hierarchical tree structure by call)
+    const traceNodes = this.makeTraceNodes(this.details);
+
+    //Make display result(for formatting)
+    const displayResult = this.makeDisplayResult(traceNodes);
+
+    //Save result in file
+    if (Environment.isNodeJS()) {
+      const htmlRoot = Format.generateHtmlRoot(displayResult);
       import("fs").then((fs) => {
         if (!fs.existsSync("scry")) {
           fs.mkdirSync("scry");
         }
         fs.writeFileSync("scry/curernt-trace.html", htmlRoot);
       });
-    } else {
-      for (let i = 0; i < displayResult.length; i += 2) {
-        console.groupCollapsed(displayResult[i]);
-        console.log(displayResult[i + 1]);
+    }
+
+    //Display result in browser
+    if (!Environment.isNodeJS()) {
+      for (let i = 0; i < displayResult.length; i++) {
+        //hide detail link
+        console.groupCollapsed(displayResult[i].title);
+        console.log(displayResult[i].url);
         console.groupEnd();
       }
     }
 
-    this.details = [];
-    return tree;
+    //Clear settings
+    this.resetSettings();
   }
 
-  private onTrace(event: any) {
-    // Node.js 환경에서는 event가 직접 데이터를 포함
-    const detail = this.isNodeJS() ? event : event.detail;
+  //OnTrace function. called when trace event is emitted.
+  private onTrace(event: unknown) {
+    // Nodejs use event directly, browser use custom event with detail
+    const detail = Environment.isNodeJS()
+      ? event
+      : (event as CustomEvent).detail;
+    //Save as detail(for making tree)
     this.details.push(detail);
   }
 
-  private makeTree(details: Detail[]): TraceNode[] {
-    // 트리 구조를 저장할 배열
-    const tree: TraceNode[] = [];
-    // 노드 맵 (traceId로 인덱싱)
+  private makeTraceNodes(details: Detail[]): TraceNode[] {
+    //Root TraceNodes (root can be multiple)
+    //ex) Trace.start() foo() bar()  Trace.end()
+    // traceNodes = [ foo-node, bar-node]
+    const traceNodes: TraceNode[] = [];
+    //Map for TraceNode(indexed by traceId)
     const nodeMap = new Map<string, TraceNode>();
-    // 부모-자식 관계를 추적하기 위한 스택
+    //Stack for parent-child relationship
     const callStack: string[] = [];
 
-    // 1단계: 모든 enter 이벤트 노드 생성 및 맵에 저장
+    //Create node and add children
     for (let i = 0; i < details.length; i++) {
+      //Current detail
       const detail = details[i];
-
+      //If "enter" event, create new node and add children
       if (detail.type === "enter") {
-        // 새 노드 생성
+        //Create new node
         const node: TraceNode = {
           traceId: detail.traceId,
           name: detail.name,
           source: detail.source,
           args: detail.args || [],
           children: [],
-          timestamp: 0,
           completed: false,
           chained: detail.chained,
           parentTraceId: detail.parentTraceId,
         };
-
-        // 맵에 저장
+        //Save to map
         nodeMap.set(detail.traceId, node);
-
-        // 실행 스택 추적 (비동기 함수도 대응)
+        //Save to callstack(for parent-child relationship)
         callStack.push(detail.traceId);
+
+        //under code is generated by claude.. so i have to fix it
+        //it's not good code. but i will  fix it
 
         // 부모-자식 관계 설정
         if (callStack.length > 1) {
@@ -124,11 +150,11 @@ class Tracer {
             parent.children.push(node);
           } else {
             // 부모가 이미 완료된 경우 루트로 처리
-            tree.push(node);
+            traceNodes.push(node);
           }
         } else {
           // 루트 레벨 노드
-          tree.push(node);
+          traceNodes.push(node);
         }
       } else if (detail.type === "exit") {
         // traceId로 노드 찾기
@@ -138,7 +164,6 @@ class Tracer {
           // exit 이벤트 정보 추가
           node.returnValue = detail.returnValue;
           node.completed = true;
-          node.duration = 0;
 
           // 콜스택에서 제거 (가장 최근에 추가된 같은 traceId 항목)
           const stackIndex = callStack.lastIndexOf(detail.traceId);
@@ -148,45 +173,50 @@ class Tracer {
         }
       }
     }
-    tree.pop(); //end 이벤트 제거
-    return tree;
+
+    //Remove "end" event trace(it's not trace tree. include when Trace.end() is called)
+    traceNodes.pop();
+    return traceNodes;
   }
 
-  private makeConsoleResult(tree: TraceNode[], level = 0): string[] {
-    const result: string[] = [];
-
-    for (const node of tree) {
-      const indent = "ㅤㅤ".repeat(level);
-      const prefix = level > 0 ? "└─ " : "";
-
+  //Make display result(for console)
+  private makeDisplayResult(
+    traceNodes: TraceNode[],
+    depth = 0
+  ): DisplayResult[] {
+    const result: DisplayResult[] = [];
+    //Iterate traceNodes(they are root nodes)
+    for (const node of traceNodes) {
+      //Indent and prefix for display
+      const indent = "ㅤㅤ".repeat(depth);
+      const prefix = depth > 0 ? "└─ " : "";
+      //Generate html content
       const htmlContent = Format.generateHtmlContent(node);
-      const dataUrl = `data:text/html;base64,${this.toBase64(htmlContent)}`;
+      //Generate data url
+      const dataUrl = `data:text/html;base64,${Transformer.toBase64(
+        htmlContent
+      )}`;
+      //Generate args string
       const args = node.args.map((arg) => JSON.stringify(arg)).join(", ");
-
-      // Node.js 환경
-      if (this.isNodeJS()) {
-        // terminal-link나 ANSI 이스케이프 코드 사용
-        result.push(`${indent}${prefix}${node.name}(${args})`, dataUrl);
-      }
-      // 브라우저 환경
-      else {
-        // console.log의 CSS 스타일링 사용
-        result.push(
-          `${indent}${prefix}${node.name}(${args})`,
-          `${indent}${prefix}[Detail] ${dataUrl}`
-        );
-      }
-
+      //Save to result
+      result.push({
+        title: `${indent}${prefix}${node.name}(${args})`,
+        url: dataUrl,
+      });
+      //Recursive call for children
       if (node.children?.length > 0) {
-        result.push(...this.makeConsoleResult(node.children, level + 1));
+        result.push(...this.makeDisplayResult(node.children, depth + 1));
       }
     }
-
     return result;
   }
 
-  private toBase64(str: string): string {
-    return this.isNodeJS() ? Buffer.from(str).toString("base64") : btoa(str);
+  //Reset settings(Trace is single instance but, v8(nodejs,browser) use signle thread, there is no side effect)
+  private resetSettings() {
+    this.isTracing = false;
+    this.details = [];
+    this.timestamp = 0;
+    this.duration = 0;
   }
 }
 

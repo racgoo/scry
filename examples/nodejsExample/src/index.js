@@ -14,7 +14,7 @@ const processText = (text) => {
 };
 
 Tracer.start();
-for (let i = 0; i < 3; i++) {
+for (let i = 0; i < 4; i++) {
   console.log(processText(addExclamation(greeting("World"))));
 }
 

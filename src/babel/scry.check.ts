@@ -1,9 +1,14 @@
+import Environment from "@/utils/enviroment";
 import * as babel from "@babel/core";
 import { DEVELOPMENT_MODE, TRACE_MARKER } from "@babel/scry.constant";
-const t = babel.types;
 
 //Checkers for scry babel plugin
 class ScryChecker {
+  private t: typeof babel.types;
+  constructor(t: typeof babel.types) {
+    this.t = t;
+  }
+
   //Check if the file is a node module
   static isNodeModule(state: babel.PluginPass) {
     const filePath = state?.filename || "";
@@ -14,27 +19,35 @@ class ScryChecker {
     }
   }
 
-  //Check if the environment is development
+  //Check if the environment is development/ it used only AST(babel)
   static isDevelopmentMode() {
-    const ENV_MODE = process.env.NODE_ENV;
-    if (ENV_MODE === DEVELOPMENT_MODE) {
-      return true;
-    } else {
-      return false;
-    }
+    return Environment.isNodeJS() && process.env.NODE_ENV === DEVELOPMENT_MODE;
   }
 
+  // Check if the function is a process execution(process.on, process.emit, etc.. it does not need to be traced)
+  // static isProcessExecution(path: babel.NodePath<babel.types.CallExpression>) {
+  //   const callee = path.node.callee;
+  //   return (
+  //     t.isMemberExpression(callee) &&
+  //     t.isIdentifier(callee.object) &&
+  //     callee.object.name === "process"
+  //   );
+  // }
+
   //Check if the function is a chained function
-  static isChainedFunction(path: babel.NodePath<babel.types.CallExpression>) {
+  public isChainedFunction(path: babel.NodePath<babel.types.CallExpression>) {
     const callee = path.node.callee;
-    return t.isMemberExpression(callee) && t.isCallExpression(callee.object);
+    return (
+      this.t.isMemberExpression(callee) &&
+      this.t.isCallExpression(callee.object)
+    );
   }
 
   //Check if the function is a pre-processed function
-  static isDuplicateFunction(path: babel.NodePath<babel.types.CallExpression>) {
+  public isDuplicateFunction(path: babel.NodePath<babel.types.CallExpression>) {
     const callee = path.node.callee;
     return (
-      t.isArrowFunctionExpression(callee) ||
+      this.t.isArrowFunctionExpression(callee) ||
       path.node.leadingComments?.some((comment) =>
         comment.value.includes(TRACE_MARKER)
       )
@@ -42,12 +55,12 @@ class ScryChecker {
   }
 
   //Check if the function is a JSX function
-  static isJSX(path: babel.NodePath<babel.types.CallExpression>) {
+  public isJSX(path: babel.NodePath<babel.types.CallExpression>) {
     const callee = path.node.callee;
     return (
-      (t.isIdentifier(callee) && callee.name.startsWith("_jsx")) ||
-      (t.isMemberExpression(callee) &&
-        t.isIdentifier(callee.object) &&
+      (this.t.isIdentifier(callee) && callee.name.startsWith("_jsx")) ||
+      (this.t.isMemberExpression(callee) &&
+        this.t.isIdentifier(callee.object) &&
         callee.object.name === "React")
     );
   }

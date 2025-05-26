@@ -18,18 +18,49 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
           state: babel.PluginPass
         ) {
           try {
+            //Create checker and inject t (babel.types must be injected by transformFile function)
+            const scryChecker = new ScryChecker(t);
+            //Create ast generator
+            const scryAst = new ScryAst(t);
+
+            //Check development mode
+            const developmentMode = ScryChecker.isDevelopmentMode();
+            //Check if the function is a duplicate function
+            const duplicated = scryChecker.isDuplicateFunction(path);
+            //Check if the function is a JSX function
+            const jsx = scryChecker.isJSX(path);
+
+            //Check if this generation is valid
+            if (!developmentMode || duplicated || jsx) {
+              return;
+            }
+
+            const callee = path.node.callee;
             if (
-              !ScryChecker.isDevelopmentMode() ||
-              ScryChecker.isDuplicateFunction(path) ||
-              ScryChecker.isJSX(path)
+              // 람다 함수 검사
+              t.isArrowFunctionExpression(callee) ||
+              // 특수 마커 주석 있는지 확인
+              path.node.leadingComments?.some((comment) =>
+                comment.value.includes(TRACE_MARKER)
+              ) ||
+              // 이벤트 리스너 등록 함수 호출인지 체크
+              (t.isMemberExpression(callee) &&
+                t.isIdentifier(callee.object) &&
+                callee.object.name === "process" &&
+                t.isIdentifier(callee.property) &&
+                ["on", "emit"].includes(callee.property.name)) ||
+              // 또는 더 일반적으로 process 관련 호출은 모두 제외
+              (t.isMemberExpression(callee) &&
+                t.isIdentifier(callee.object) &&
+                callee.object.name === "process")
             ) {
               return;
             }
 
             //Check chained function
-            const chained = ScryChecker.isChainedFunction(path);
+            const chained = scryChecker.isChainedFunction(path);
             //Extract function name
-            const fnName = ScryAst.getFunctionName(path);
+            const fnName = scryAst.getFunctionName(path);
 
             //Generate new node (with marker comment)
             const newNode = t.callExpression(
@@ -38,17 +69,17 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
                 [],
                 t.blockStatement([
                   //Create marker variable
-                  ScryAst.createMarkerVariable(),
+                  scryAst.createMarkerVariable(),
                   //Create traceId
-                  ScryAst.createTraceId(),
+                  scryAst.createTraceId(),
                   //Update global currentTraceId
-                  ScryAst.setCurrentTraceIdAsGlobalCurrentTraceId(),
+                  scryAst.setCurrentTraceIdAsGlobalCurrentTraceId(),
                   //Get parent traceId (default to null)
-                  ScryAst.getParentTraceId(),
+                  scryAst.getParentTraceId(),
                   //Generate 'enter' event
                   t.expressionStatement(
-                    ScryAst.createEmitTraceEvent(
-                      ScryAst.getEventDetail(path, state, {
+                    scryAst.createEmitTraceEvent(
+                      scryAst.getEventDetail(path, state, {
                         type: "enter",
                         fnName,
                         chained,
@@ -57,15 +88,15 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
                   ),
 
                   //Set current traceId as parent traceId
-                  ScryAst.setCurrentTraceIdAsGlobalParentTraceId(),
+                  scryAst.setCurrentTraceIdAsGlobalParentTraceId(),
                   //Execute original function (current traceId is set as parent traceId to inner function)
-                  ScryAst.createReturnValueWithOriginExecution(path),
+                  scryAst.createReturnValueWithOriginExecution(path),
                   //Restore parent traceId
-                  ScryAst.setParentTraceIdAsGlobalParentTraceId(),
+                  scryAst.setParentTraceIdAsGlobalParentTraceId(),
                   //Generate 'exit' event
                   t.expressionStatement(
-                    ScryAst.createEmitTraceEvent(
-                      ScryAst.getEventDetail(path, state, {
+                    scryAst.createEmitTraceEvent(
+                      scryAst.getEventDetail(path, state, {
                         type: "exit",
                         fnName,
                         chained,
