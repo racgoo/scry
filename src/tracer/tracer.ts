@@ -1,26 +1,6 @@
 import Output from "@utils/output";
 import Format from "@tracer/format";
 
-interface TraceNode {
-  traceId: string;
-  name: string;
-  source: string;
-  args: any[];
-  children: TraceNode[];
-  returnValue?: any;
-  timestamp?: number;
-  duration?: number;
-  completed: boolean;
-  chained?: boolean;
-  parentTraceId?: string;
-  // 컨텍스트 정보 추가
-  context?: {
-    params: string; // 파라미터 문자열
-    result: string; // 반환값 문자열
-    link: string; // 컨텍스트 링크 (예: "context-{traceId}")
-  };
-}
-
 class Tracer {
   private isTracing = false;
   private details: Detail[] = [];
