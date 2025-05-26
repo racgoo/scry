@@ -1,5 +1,5 @@
 class Output {
-  public static print(...args: any[]) {
+  public static print(...args: unknown[]) {
     console.log(`[SCRY]:`, ...args);
   }
 }

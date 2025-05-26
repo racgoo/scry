@@ -10,6 +10,11 @@ interface TraceNode {
   completed: boolean;
   chained?: boolean;
   parentTraceId?: string;
+  context?: {
+    params: string;
+    result: string;
+    link: string;
+  };
 }
 
 interface Detail {
