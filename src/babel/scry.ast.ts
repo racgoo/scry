@@ -1,5 +1,11 @@
 import * as babel from "@babel/core";
-import { TRACE_MARKER } from "@babel/scry.constant";
+import {
+  TRACE_MARKER,
+  ScryAstVariable,
+  TRACE_EVENT_NAME,
+  ANONYMOUS_FUNCTION_NAME,
+  UNKNOWN_LOCATION,
+} from "@babel/scry.constant";
 
 //AST generators for scry babel plugin
 class ScryAst {
@@ -19,15 +25,15 @@ class ScryAst {
   public static createTraceId() {
     return this.t.variableDeclaration("const", [
       this.t.variableDeclarator(
-        this.t.identifier("traceId"),
+        this.t.identifier(ScryAstVariable.traceId),
         this.t.conditionalExpression(
           this.t.binaryExpression(
             "===",
             this.t.unaryExpression(
               "typeof",
               this.t.memberExpression(
-                this.t.identifier("globalThis"),
-                this.t.identifier("__scryCalledCount")
+                this.t.identifier(ScryAstVariable.globalThis),
+                this.t.identifier(ScryAstVariable.globalScryCalledCount)
               )
             ),
             this.t.stringLiteral("undefined")
@@ -35,16 +41,16 @@ class ScryAst {
           this.t.assignmentExpression(
             "=",
             this.t.memberExpression(
-              this.t.identifier("globalThis"),
-              this.t.identifier("__scryCalledCount")
+              this.t.identifier(ScryAstVariable.globalThis),
+              this.t.identifier(ScryAstVariable.globalScryCalledCount)
             ),
             this.t.numericLiteral(0)
           ),
           this.t.updateExpression(
             "++",
             this.t.memberExpression(
-              this.t.identifier("globalThis"),
-              this.t.identifier("__scryCalledCount")
+              this.t.identifier(ScryAstVariable.globalThis),
+              this.t.identifier(ScryAstVariable.globalScryCalledCount)
             ),
             false
           )
@@ -59,10 +65,10 @@ class ScryAst {
       this.t.assignmentExpression(
         "=",
         this.t.memberExpression(
-          this.t.identifier("globalThis"),
-          this.t.identifier("__currentTraceId")
+          this.t.identifier(ScryAstVariable.globalThis),
+          this.t.identifier(ScryAstVariable.globalCurrentTraceId)
         ),
-        this.t.identifier("traceId")
+        this.t.identifier(ScryAstVariable.traceId)
       )
     );
   }
@@ -73,10 +79,10 @@ class ScryAst {
       this.t.assignmentExpression(
         "=",
         this.t.memberExpression(
-          this.t.identifier("globalThis"),
-          this.t.identifier("__parentTraceId")
+          this.t.identifier(ScryAstVariable.globalThis),
+          this.t.identifier(ScryAstVariable.globalCurrentTraceId)
         ),
-        this.t.identifier("traceId")
+        this.t.identifier(ScryAstVariable.traceId)
       )
     );
   }
@@ -87,8 +93,8 @@ class ScryAst {
       this.t.assignmentExpression(
         "=",
         this.t.memberExpression(
-          this.t.identifier("globalThis"),
-          this.t.identifier("__parentTraceId")
+          this.t.identifier(ScryAstVariable.globalThis),
+          this.t.identifier(ScryAstVariable.globalParentTraceId)
         ),
         this.t.identifier("parentTraceId")
       )
@@ -103,8 +109,8 @@ class ScryAst {
         this.t.logicalExpression(
           "??",
           this.t.memberExpression(
-            this.t.identifier("globalThis"),
-            this.t.identifier("__parentTraceId")
+            this.t.identifier(ScryAstVariable.globalThis),
+            this.t.identifier(ScryAstVariable.globalParentTraceId)
           ),
           this.t.nullLiteral()
         )
@@ -119,7 +125,7 @@ class ScryAst {
     const callee = path.node.callee;
     return this.t.variableDeclaration("const", [
       this.t.variableDeclarator(
-        this.t.identifier("returnValue"),
+        this.t.identifier(ScryAstVariable.returnValue),
         this.t.callExpression(callee, path.node.arguments)
       ),
     ]);
@@ -139,17 +145,17 @@ class ScryAst {
           this.t.identifier("process"),
           this.t.identifier("emit")
         ),
-        [this.t.stringLiteral("scry:trace"), detail]
+        [this.t.stringLiteral(TRACE_EVENT_NAME), detail]
       ),
       // Browser
       this.t.callExpression(
         this.t.memberExpression(
-          this.t.identifier("globalThis"),
+          this.t.identifier(ScryAstVariable.globalThis),
           this.t.identifier("dispatchEvent")
         ),
         [
           this.t.newExpression(this.t.identifier("CustomEvent"), [
-            this.t.stringLiteral("scry:trace"),
+            this.t.stringLiteral(TRACE_EVENT_NAME),
             this.t.objectExpression([
               this.t.objectProperty(this.t.identifier("detail"), detail),
             ]),
@@ -164,44 +170,44 @@ class ScryAst {
     path: babel.NodePath<babel.types.CallExpression>,
     state: babel.PluginPass,
     info: {
-      type: "enter" | "exit";
+      type: TraceEventType;
       fnName: string;
       chained: boolean;
     }
   ) {
     return this.t.objectExpression([
       this.t.objectProperty(
-        this.t.identifier("type"),
+        this.t.identifier(ScryAstVariable.type),
         this.t.stringLiteral(info.type)
       ),
       this.t.objectProperty(
-        this.t.identifier("name"),
+        this.t.identifier(ScryAstVariable.name),
         this.t.stringLiteral(info.fnName)
       ),
       this.t.objectProperty(
-        this.t.identifier("traceId"),
-        this.t.identifier("traceId")
+        this.t.identifier(ScryAstVariable.traceId),
+        this.t.identifier(ScryAstVariable.traceId)
       ),
       this.t.objectProperty(
-        this.t.identifier("source"),
+        this.t.identifier(ScryAstVariable.source),
         this.getSource(path, state)
       ),
       this.t.objectProperty(
-        this.t.identifier("returnValue"),
+        this.t.identifier(ScryAstVariable.returnValue),
         info.type === "enter"
           ? this.t.nullLiteral()
-          : this.t.identifier("returnValue")
+          : this.t.identifier(ScryAstVariable.returnValue)
       ),
       this.t.objectProperty(
-        this.t.identifier("chained"),
+        this.t.identifier(ScryAstVariable.chained),
         this.t.booleanLiteral(info.chained)
       ),
       this.t.objectProperty(
-        this.t.identifier("parentTraceId"),
-        this.t.identifier("parentTraceId")
+        this.t.identifier(ScryAstVariable.parentTraceId),
+        this.t.identifier(ScryAstVariable.parentTraceId)
       ),
       this.t.objectProperty(
-        this.t.identifier("args"),
+        this.t.identifier(ScryAstVariable.args),
         this.getArgs(path, state)
       ),
     ]);
@@ -210,7 +216,7 @@ class ScryAst {
   //Get function name as string
   static getFunctionName(path: babel.NodePath<babel.types.CallExpression>) {
     const callee = path.node.callee;
-    let fnName = "anonymous";
+    let fnName = ANONYMOUS_FUNCTION_NAME;
     if (this.t.isIdentifier(callee)) {
       fnName = callee.name;
     } else if (
@@ -237,12 +243,12 @@ class ScryAst {
         ) {
           const location = arg.loc
             ? `${arg.loc.start.line}:${arg.loc.start.column}`
-            : "unknown";
+            : UNKNOWN_LOCATION;
 
           const name =
             this.t.isFunctionExpression(arg) && arg.id
               ? arg.id.name
-              : "anonymous";
+              : ANONYMOUS_FUNCTION_NAME;
 
           const params = arg.params ? `(${arg.params.length} params)` : "";
 
@@ -286,7 +292,7 @@ class ScryAst {
       `${state?.filename || ""}:${
         path.node.loc
           ? `${path.node.loc.start.line}:${path.node.loc.start.column}`
-          : "unknown"
+          : UNKNOWN_LOCATION
       }`
     );
   }

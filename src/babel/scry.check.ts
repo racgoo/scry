@@ -1,5 +1,5 @@
 import * as babel from "@babel/core";
-import { TRACE_MARKER } from "./scry.constant";
+import { DEVELOPMENT_MODE, TRACE_MARKER } from "@babel/scry.constant";
 const t = babel.types;
 
 //Checkers for scry babel plugin
@@ -17,7 +17,7 @@ class ScryChecker {
   //Check if the environment is development
   static isDevelopmentMode() {
     const ENV_MODE = process.env.NODE_ENV;
-    if (ENV_MODE === "development") {
+    if (ENV_MODE === DEVELOPMENT_MODE) {
       return true;
     } else {
       return false;
@@ -52,4 +52,5 @@ class ScryChecker {
     );
   }
 }
+
 export default ScryChecker;

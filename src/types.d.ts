@@ -2,9 +2,9 @@ interface TraceNode {
   traceId: string;
   name: string;
   source: string;
-  args: any[];
+  args: unknown[];
   children: TraceNode[];
-  returnValue?: any;
+  returnValue?: unknown;
   timestamp?: number;
   duration?: number;
   completed: boolean;
@@ -13,12 +13,14 @@ interface TraceNode {
 }
 
 interface Detail {
-  type: string;
+  type: TraceEventType;
   traceId: string;
   name: string;
   source: string;
-  args: any[];
+  args: unknown[];
   chained: boolean;
   parentTraceId: string;
-  returnValue: any;
+  returnValue: unknown;
 }
+
+type TraceEventType = "enter" | "exit";
