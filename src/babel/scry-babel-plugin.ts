@@ -38,6 +38,54 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
     );
   };
 
+  function getArgs(
+    path: babel.NodePath<babel.types.CallExpression>,
+    state: babel.PluginPass
+  ) {
+    return t.arrayExpression(
+      path.node.arguments.map((arg) => {
+        // 함수인 경우
+        if (t.isArrowFunctionExpression(arg) || t.isFunctionExpression(arg)) {
+          const location = arg.loc
+            ? `${arg.loc.start.line}:${arg.loc.start.column}`
+            : "unknown";
+
+          const name =
+            t.isFunctionExpression(arg) && arg.id ? arg.id.name : "anonymous";
+
+          const params = arg.params ? `(${arg.params.length} params)` : "";
+
+          const filePath =
+            state?.filename?.split("/").slice(-2).join("/") || "";
+
+          return t.stringLiteral(
+            `[Function: ${name}${params} at ${filePath}:${location}]`
+          );
+        }
+        // 문자열 리터럴
+        else if (t.isStringLiteral(arg)) {
+          return t.stringLiteral(arg.value);
+        }
+        // 숫자 리터럴
+        else if (t.isNumericLiteral(arg)) {
+          return t.numericLiteral(Number(arg.value));
+        }
+        // 식별자 (변수)
+        else if (t.isIdentifier(arg)) {
+          return t.identifier(arg.name);
+        }
+        // 객체 표현식
+        else if (t.isObjectExpression(arg)) {
+          return arg;
+        }
+        // 기타 타입
+        else {
+          return t.stringLiteral(`[${arg.type}]`);
+        }
+      })
+    );
+  }
+
   return {
     visitor: {
       Program: {
@@ -245,58 +293,7 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
                         ),
                         t.objectProperty(
                           t.identifier("args"),
-                          t.arrayExpression(
-                            path.node.arguments.map((arg) => {
-                              // 함수인 경우
-                              if (
-                                t.isArrowFunctionExpression(arg) ||
-                                t.isFunctionExpression(arg)
-                              ) {
-                                const location = arg.loc
-                                  ? `${arg.loc.start.line}:${arg.loc.start.column}`
-                                  : "unknown";
-
-                                const name =
-                                  t.isFunctionExpression(arg) && arg.id
-                                    ? arg.id.name
-                                    : "anonymous";
-
-                                const params = arg.params
-                                  ? `(${arg.params.length} params)`
-                                  : "";
-
-                                const filePath =
-                                  state?.filename
-                                    ?.split("/")
-                                    .slice(-2)
-                                    .join("/") || "";
-
-                                return t.stringLiteral(
-                                  `[Function: ${name}${params} at ${filePath}:${location}]`
-                                );
-                              }
-                              // 문자열 리터럴
-                              else if (t.isStringLiteral(arg)) {
-                                return t.stringLiteral(arg.value);
-                              }
-                              // 숫자 리터럴
-                              else if (t.isNumericLiteral(arg)) {
-                                return t.numericLiteral(Number(arg.value));
-                              }
-                              // 식별자 (변수)
-                              else if (t.isIdentifier(arg)) {
-                                return t.identifier(arg.name);
-                              }
-                              // 객체 표현식
-                              else if (t.isObjectExpression(arg)) {
-                                return arg;
-                              }
-                              // 기타 타입
-                              else {
-                                return t.stringLiteral(`[${arg.type}]`);
-                              }
-                            })
-                          )
+                          getArgs(path, state)
                         ),
                       ])
                     )
