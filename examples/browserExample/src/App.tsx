@@ -25,6 +25,7 @@ function App() {
 
     Tracer.start();
     bar(5);
+
     Tracer.end();
   }
   return (

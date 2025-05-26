@@ -5,8 +5,6 @@ interface TraceNode {
   args: unknown[];
   children: TraceNode[];
   returnValue?: unknown;
-  timestamp?: number;
-  duration?: number;
   completed: boolean;
   chained?: boolean;
   parentTraceId?: string;
@@ -26,6 +24,11 @@ interface Detail {
   chained: boolean;
   parentTraceId: string;
   returnValue: unknown;
+}
+
+interface DisplayResult {
+  title: string;
+  url: string;
 }
 
 type TraceEventType = "enter" | "exit";

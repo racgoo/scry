@@ -9,10 +9,13 @@ import {
 
 //AST generators for scry babel plugin
 class ScryAst {
-  private static t = babel.types;
+  private t: typeof babel.types;
+  constructor(t: typeof babel.types) {
+    this.t = t;
+  }
 
   //Create ast marker variable
-  public static createMarkerVariable() {
+  public createMarkerVariable() {
     return this.t.variableDeclaration("const", [
       this.t.variableDeclarator(
         this.t.identifier(TRACE_MARKER),
@@ -22,7 +25,7 @@ class ScryAst {
   }
 
   //Create ast traceId variable with auto increment
-  public static createTraceId() {
+  public createTraceId() {
     return this.t.variableDeclaration("const", [
       this.t.variableDeclarator(
         this.t.identifier(ScryAstVariable.traceId),
@@ -60,7 +63,7 @@ class ScryAst {
   }
 
   //Set ast currentTraceId to globalThis
-  static setCurrentTraceIdAsGlobalCurrentTraceId() {
+  public setCurrentTraceIdAsGlobalCurrentTraceId() {
     return this.t.expressionStatement(
       this.t.assignmentExpression(
         "=",
@@ -74,7 +77,7 @@ class ScryAst {
   }
 
   //Set ast currentTraceId to globalThis
-  static setCurrentTraceIdAsGlobalParentTraceId() {
+  public setCurrentTraceIdAsGlobalParentTraceId() {
     return this.t.expressionStatement(
       this.t.assignmentExpression(
         "=",
@@ -88,7 +91,7 @@ class ScryAst {
   }
 
   //Set ast parentTraceId to globalThis
-  static setParentTraceIdAsGlobalParentTraceId() {
+  public setParentTraceIdAsGlobalParentTraceId() {
     return this.t.expressionStatement(
       this.t.assignmentExpression(
         "=",
@@ -102,7 +105,7 @@ class ScryAst {
   }
 
   //Get ast parentTraceId variable from globalThis
-  static getParentTraceId() {
+  public getParentTraceId() {
     return this.t.variableDeclaration("const", [
       this.t.variableDeclarator(
         this.t.identifier("parentTraceId"),
@@ -119,7 +122,7 @@ class ScryAst {
   }
 
   //Create ast returnValue with origin execution
-  static createReturnValueWithOriginExecution(
+  public createReturnValueWithOriginExecution(
     path: babel.NodePath<babel.types.CallExpression>
   ) {
     const callee = path.node.callee;
@@ -132,7 +135,7 @@ class ScryAst {
   }
 
   //Create emit trace event ast object
-  static createEmitTraceEvent(detail: babel.types.ObjectExpression) {
+  public createEmitTraceEvent(detail: babel.types.ObjectExpression) {
     return this.t.conditionalExpression(
       this.t.binaryExpression(
         "===",
@@ -166,7 +169,7 @@ class ScryAst {
   }
 
   //Create event detail ast object
-  static getEventDetail(
+  public getEventDetail(
     path: babel.NodePath<babel.types.CallExpression>,
     state: babel.PluginPass,
     info: {
@@ -214,7 +217,7 @@ class ScryAst {
   }
 
   //Get function name as string
-  static getFunctionName(path: babel.NodePath<babel.types.CallExpression>) {
+  public getFunctionName(path: babel.NodePath<babel.types.CallExpression>) {
     const callee = path.node.callee;
     let fnName = ANONYMOUS_FUNCTION_NAME;
     if (this.t.isIdentifier(callee)) {
@@ -229,7 +232,7 @@ class ScryAst {
   }
 
   //Create args ast object
-  static getArgs(
+  public getArgs(
     path: babel.NodePath<babel.types.CallExpression>,
     state: babel.PluginPass
   ) {
@@ -284,7 +287,7 @@ class ScryAst {
   }
 
   //Create source ast object
-  static getSource(
+  public getSource(
     path: babel.NodePath<babel.types.CallExpression>,
     state: babel.PluginPass
   ) {

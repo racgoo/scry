@@ -1,5 +1,7 @@
+//data formatter for trace result
 class Format {
-  static generateHtmlRoot(items: [string, string][]): string {
+  //generate html root for trace result(zip all trace result)
+  static generateHtmlRoot(items: DisplayResult[]): string {
     return `
       <!DOCTYPE html>
       <html>
@@ -72,9 +74,9 @@ class Format {
           <div class="trace-list">
             ${items
               .map(
-                ([text, url]) => `
-              <div class="trace-item" onclick="showModal('${url}')" >
-                <span>${text}</span>
+                (item) => `
+              <div class="trace-item" onclick="showModal('${item.url}')" >
+                <span>${item.title}</span>
               </div>
             `
               )
@@ -112,6 +114,7 @@ class Format {
     `;
   }
 
+  //generate html content for trace result
   static generateHtmlContent(node: TraceNode): string {
     return `
       <!DOCTYPE html>
@@ -166,7 +169,6 @@ class Format {
             <div class="source">
               <strong>Source:</strong> ${node.source}
             </div>
-            ${node.duration ? `<div>Duration: ${node.duration}ms</div>` : ""}
           </div>
         </body>
       </html>
