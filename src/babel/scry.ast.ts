@@ -1,7 +1,7 @@
 import * as babel from "@babel/core";
 import {
-  TRACE_MARKER,
   ScryAstVariable,
+  TRACE_MARKER,
   TRACE_EVENT_NAME,
   ANONYMOUS_FUNCTION_NAME,
   UNKNOWN_LOCATION,
@@ -121,6 +121,63 @@ class ScryAst {
     ]);
   }
 
+  //Create ast returnValue
+  public createReturnValue() {
+    return this.t.variableDeclaration("let", [
+      this.t.variableDeclarator(
+        this.t.identifier(ScryAstVariable.returnValue),
+        this.t.nullLiteral()
+      ),
+    ]);
+  }
+
+  //Update returnValue with origin execution
+  public updateReturnValueWithOriginExecution(
+    path: babel.NodePath<babel.types.CallExpression>
+  ) {
+    const originalCall = path.node;
+    // Create try-catch block
+    const tryBlock = this.t.blockStatement([
+      this.t.expressionStatement(
+        this.t.assignmentExpression(
+          "=",
+          this.t.identifier(ScryAstVariable.returnValue),
+          originalCall
+        )
+      ),
+    ]);
+
+    // Create catch clause
+    const catchClause = this.t.catchClause(
+      this.t.identifier("error"),
+      this.t.blockStatement([
+        this.t.expressionStatement(
+          this.t.assignmentExpression(
+            "=",
+            this.t.identifier(ScryAstVariable.returnValue),
+            this.t.identifier("error")
+          )
+        ),
+      ])
+    );
+
+    return this.t.tryStatement(tryBlock, catchClause);
+  }
+
+  //Emit error if returnValue is error(origin execution is failed)
+  public emitErrorIfReturnIsError() {
+    return this.t.ifStatement(
+      this.t.binaryExpression(
+        "instanceof",
+        this.t.identifier(ScryAstVariable.returnValue),
+        this.t.identifier("Error")
+      ),
+      this.t.blockStatement([
+        this.t.throwStatement(this.t.identifier(ScryAstVariable.returnValue)),
+      ])
+    );
+  }
+
   //Create ast returnValue with origin execution
   public createReturnValueWithOriginExecution(
     path: babel.NodePath<babel.types.CallExpression>
@@ -135,7 +192,7 @@ class ScryAst {
   }
 
   //Create emit trace event ast object
-  public createEmitTraceEvent(detail: babel.types.ObjectExpression) {
+  public emitTraceEvent(detail: babel.types.ObjectExpression) {
     return this.t.conditionalExpression(
       this.t.binaryExpression(
         "===",

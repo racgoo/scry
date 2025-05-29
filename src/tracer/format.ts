@@ -160,11 +160,11 @@ class Format {
             <h2>${node.name}</h2>
             <div class="args">
               <strong>Arguments:</strong>
-              <pre>${JSON.stringify(node.args, null, 2)}</pre>
+              <pre>${JSON.stringify(node.args)}</pre>
             </div>
             <div class="return">
               <strong>Return Value:</strong>
-              <pre>${JSON.stringify(node.returnValue, null, 2)}</pre>
+              <pre>${this.parseReturnValue(node.returnValue)}</pre>
             </div>
             <div class="source">
               <strong>Source:</strong> ${node.source}
@@ -173,6 +173,14 @@ class Format {
         </body>
       </html>
     `;
+  }
+
+  //Parse return value to string(error stack or message)
+  private static parseReturnValue(returnValue: unknown): string {
+    if (returnValue instanceof Error) {
+      return returnValue.stack || returnValue.message;
+    }
+    return JSON.stringify(returnValue);
   }
 }
 

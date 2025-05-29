@@ -17,14 +17,15 @@ function App() {
     function baz(test: { a: number }) {
       return test.a;
     }
-    function bar(y: number) {
+    function bar({ y }: { y: number }) {
+      throw new Error("test");
       foo1(foo2(2));
       foo2(y + 3);
       baz({ a: 1 });
     }
 
     Tracer.start();
-    bar(5);
+    bar({ y: 5 });
 
     Tracer.end();
   }

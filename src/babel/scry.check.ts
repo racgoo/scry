@@ -24,16 +24,6 @@ class ScryChecker {
     return Environment.isNodeJS() && process.env.NODE_ENV === DEVELOPMENT_MODE;
   }
 
-  // Check if the function is a process execution(process.on, process.emit, etc.. it does not need to be traced)
-  // static isProcessExecution(path: babel.NodePath<babel.types.CallExpression>) {
-  //   const callee = path.node.callee;
-  //   return (
-  //     t.isMemberExpression(callee) &&
-  //     t.isIdentifier(callee.object) &&
-  //     callee.object.name === "process"
-  //   );
-  // }
-
   //Check if the function is a chained function
   public isChainedFunction(path: babel.NodePath<babel.types.CallExpression>) {
     const callee = path.node.callee;

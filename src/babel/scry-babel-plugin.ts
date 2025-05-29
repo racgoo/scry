@@ -1,7 +1,7 @@
 import * as babel from "@babel/core";
 import ScryAst from "@babel/scry.ast";
 import ScryChecker from "@babel/scry.check";
-import { TRACE_MARKER } from "@babel/scry.constant";
+import { ScryAstVariable, TRACE_MARKER } from "@babel/scry.constant";
 
 function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
   return {
@@ -37,19 +37,19 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
 
             const callee = path.node.callee;
             if (
-              // 람다 함수 검사
+              //Check if the function is an arrow function
               t.isArrowFunctionExpression(callee) ||
-              // 특수 마커 주석 있는지 확인
+              //Check if the function has a TRACE_MARKER marker comment
               path.node.leadingComments?.some((comment) =>
                 comment.value.includes(TRACE_MARKER)
               ) ||
-              // 이벤트 리스너 등록 함수 호출인지 체크
+              //Check if the function is a event function
               (t.isMemberExpression(callee) &&
                 t.isIdentifier(callee.object) &&
                 callee.object.name === "process" &&
                 t.isIdentifier(callee.property) &&
                 ["on", "emit"].includes(callee.property.name)) ||
-              // 또는 더 일반적으로 process 관련 호출은 모두 제외
+              //Check if the function is a process function
               (t.isMemberExpression(callee) &&
                 t.isIdentifier(callee.object) &&
                 callee.object.name === "process")
@@ -78,7 +78,7 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
                   scryAst.getParentTraceId(),
                   //Generate 'enter' event
                   t.expressionStatement(
-                    scryAst.createEmitTraceEvent(
+                    scryAst.emitTraceEvent(
                       scryAst.getEventDetail(path, state, {
                         type: "enter",
                         fnName,
@@ -89,13 +89,15 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
 
                   //Set current traceId as parent traceId
                   scryAst.setCurrentTraceIdAsGlobalParentTraceId(),
-                  //Execute original function (current traceId is set as parent traceId to inner function)
-                  scryAst.createReturnValueWithOriginExecution(path),
+                  //Create returnValue
+                  scryAst.createReturnValue(),
+                  //Update returnValue with origin execution
+                  scryAst.updateReturnValueWithOriginExecution(path),
                   //Restore parent traceId
                   scryAst.setParentTraceIdAsGlobalParentTraceId(),
                   //Generate 'exit' event
                   t.expressionStatement(
-                    scryAst.createEmitTraceEvent(
+                    scryAst.emitTraceEvent(
                       scryAst.getEventDetail(path, state, {
                         type: "exit",
                         fnName,
@@ -103,8 +105,9 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
                       })
                     )
                   ),
+
                   //Return origin function result
-                  t.returnStatement(t.identifier("returnValue")),
+                  t.returnStatement(t.identifier(ScryAstVariable.returnValue)),
                 ])
               ),
               []
