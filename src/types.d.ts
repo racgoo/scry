@@ -5,6 +5,7 @@ interface TraceNode {
   args: unknown[];
   children: TraceNode[];
   returnValue?: unknown;
+  errored: boolean;
   completed: boolean;
   chained?: boolean;
   parentTraceId?: string;

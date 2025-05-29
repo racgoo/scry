@@ -24,11 +24,9 @@ class Tracer {
       return;
     }
     this.isTracing = true;
-
     //Init start time
     const now = Date.now();
     this.timestamp = now;
-
     //Register event listener according to the execution environment
     if (Environment.isNodeJS()) {
       //Nodejs use process event
@@ -50,7 +48,6 @@ class Tracer {
       return;
     }
     this.isTracing = false;
-
     //Remove event listener according to the execution environment
     if (Environment.isNodeJS()) {
       //Nodejs use process event
@@ -59,18 +56,13 @@ class Tracer {
       //Browser use globalThis event
       globalThis.removeEventListener(TRACE_EVENT_NAME, this.boundOnTrace);
     }
-
     //Update duration
     this.duration = Date.now() - this.timestamp;
-
     Output.print("Tracing is ended");
-
     //Make trace tree(hierarchical tree structure by call)
     const traceNodes = this.makeTraceNodes(this.details);
-
     //Make display result(for formatting)
     const displayResult = this.makeDisplayResult(traceNodes);
-
     //Save result in file
     if (Environment.isNodeJS()) {
       const htmlRoot = Format.generateHtmlRoot(displayResult);
@@ -104,6 +96,10 @@ class Tracer {
       : (event as CustomEvent).detail;
     //Save as detail(for making tree)
     this.details.push(detail);
+    //If detail is error, show raw error(not trace tree)
+    if (detail.returnValue instanceof Error) {
+      Output.printError(detail.returnValue);
+    }
   }
 
   private makeTraceNodes(details: Detail[]): TraceNode[] {
@@ -124,6 +120,7 @@ class Tracer {
       if (detail.type === "enter") {
         //Create new node
         const node: TraceNode = {
+          errored: false,
           traceId: detail.traceId,
           name: detail.name,
           source: detail.source,
@@ -164,6 +161,7 @@ class Tracer {
           // exit 이벤트 정보 추가
           node.returnValue = detail.returnValue;
           node.completed = true;
+          node.errored = detail.returnValue instanceof Error;
 
           // 콜스택에서 제거 (가장 최근에 추가된 같은 traceId 항목)
           const stackIndex = callStack.lastIndexOf(detail.traceId);
@@ -200,7 +198,9 @@ class Tracer {
       const args = node.args.map((arg) => JSON.stringify(arg)).join(", ");
       //Save to result
       result.push({
-        title: `${indent}${prefix}${node.name}(${args})`,
+        title: `${indent}${prefix}${node.name}(${args}) ${
+          node.errored ? "⚠️Error⚠️" : ""
+        }`,
         url: dataUrl,
       });
       //Recursive call for children

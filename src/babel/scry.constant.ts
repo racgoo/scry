@@ -4,6 +4,11 @@ export const ANONYMOUS_FUNCTION_NAME = "AnonymousFunction";
 export const UNKNOWN_LOCATION = "UnknownLocation";
 export const DEVELOPMENT_MODE = "development";
 
+export const ScryEventType = {
+  enter: "enter",
+  exit: "exit",
+};
+
 export const ScryAstVariable = {
   traceId: "traceId",
   parentTraceId: "parentTraceId",
