@@ -120,6 +120,7 @@ class Tracer {
       if (detail.type === "enter") {
         //Create new node
         const node: TraceNode = {
+          errored: false,
           traceId: detail.traceId,
           name: detail.name,
           source: detail.source,
@@ -160,6 +161,7 @@ class Tracer {
           // exit 이벤트 정보 추가
           node.returnValue = detail.returnValue;
           node.completed = true;
+          node.errored = detail.returnValue instanceof Error;
 
           // 콜스택에서 제거 (가장 최근에 추가된 같은 traceId 항목)
           const stackIndex = callStack.lastIndexOf(detail.traceId);
@@ -196,7 +198,9 @@ class Tracer {
       const args = node.args.map((arg) => JSON.stringify(arg)).join(", ");
       //Save to result
       result.push({
-        title: `${indent}${prefix}${node.name}(${args})`,
+        title: `${indent}${prefix}${node.name}(${args}) ${
+          node.errored ? "⚠️Error⚠️" : ""
+        }`,
         url: dataUrl,
       });
       //Recursive call for children

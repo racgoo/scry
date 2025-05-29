@@ -134,6 +134,25 @@ class Format {
               background: white;
               border-radius: 8px;
               box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              display: flex;
+              align-items: start;
+              gap: 15px;
+            }
+            .error-indicator {
+              width: 12px;
+              height: 12px;
+              border-radius: 50%;
+              background: ${node.errored ? "#ff0000" : "transparent"};
+              margin-top: 5px;
+              ${node.errored ? "animation: blink 1s infinite;" : ""}
+            }
+            @keyframes blink {
+              0% { opacity: 1; }
+              50% { opacity: 0.3; }
+              100% { opacity: 1; }
+            }
+            .content {
+              flex: 1;
             }
             .args { 
               color: #666;
@@ -157,17 +176,21 @@ class Format {
         </head>
         <body>
           <div class="trace-info">
-            <h2>${node.name}</h2>
-            <div class="args">
-              <strong>Arguments:</strong>
-              <pre>${JSON.stringify(node.args)}</pre>
-            </div>
-            <div class="return">
-              <strong>Return Value:</strong>
-              <pre>${this.parseReturnValue(node.returnValue)}</pre>
-            </div>
-            <div class="source">
-              <strong>Source:</strong> ${node.source}
+            <div class="error-indicator"></div>
+            <div class="content">
+              <h2>${node.name}</h2>
+              <div class="args">
+                <strong>Arguments:</strong>
+                <pre>${JSON.stringify(node.args)}</pre>
+              </div>
+              <div class="return">
+                <strong>Return Value:</strong>
+                <pre>${node.errored ? "Error" : "Success"}</pre>
+                <pre>${this.parseReturnValue(node.returnValue)}</pre>
+              </div>
+              <div class="source">
+                <strong>Source:</strong> ${node.source}
+              </div>
             </div>
           </div>
         </body>
