@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "npm run build && node dist/index.js",
+    "dev_reload": "npm run reload && npm run build && node dist/index.js",
     "build": "NODE_ENV=development babel src -d dist",
+    "reload": "rm -rf node_modules/ && npm i",
     "dev": "NODE_ENV=development nodemon --config nodemon.json --exec 'npm run start'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

@@ -9,6 +9,8 @@ interface TraceNode {
   completed: boolean;
   chained?: boolean;
   parentTraceId?: string;
+  originCode?: string;
+  classCode?: string;
   context?: {
     params: string;
     result: string;
@@ -25,11 +27,13 @@ interface Detail {
   chained: boolean;
   parentTraceId: string;
   returnValue: unknown;
+  originCode: string;
+  classCode: string;
 }
 
-interface DisplayResult {
+interface DisplayDetailResult {
   title: string;
-  url: string;
+  html: string;
 }
 
 type TraceEventType = "enter" | "exit";

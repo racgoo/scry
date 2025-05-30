@@ -3,29 +3,42 @@ import viteLogo from "/vite.svg";
 import "./App.css";
 import { Tracer } from "@racgoo/scry";
 
+class ClassTest {
+  public test() {
+    return 1;
+  }
+  public test2() {
+    return this.test();
+  }
+}
+
+function foo1(x: number) {
+  foo2(x);
+  return x * 2;
+}
+
+function foo2(z: number) {
+  return z * 2;
+}
+
+function baz(test: { a: number }) {
+  return test.a;
+}
+
+function bar({ y }: { y: number }) {
+  foo1(foo2(2));
+  foo2(y + 3);
+  baz({ a: 1 });
+}
+
 function App() {
   function test() {
-    function foo1(x: number) {
-      foo2(x);
-      return x * 2;
-    }
-
-    function foo2(z: number) {
-      return z * 2;
-    }
-
-    function baz(test: { a: number }) {
-      return test.a;
-    }
-    function bar({ y }: { y: number }) {
-      throw new Error("test");
-      foo1(foo2(2));
-      foo2(y + 3);
-      baz({ a: 1 });
-    }
+    const classTest = new ClassTest();
 
     Tracer.start();
+
     bar({ y: 5 });
+    classTest.test2();
 
     Tracer.end();
   }

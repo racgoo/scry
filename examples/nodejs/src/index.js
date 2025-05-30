@@ -1,6 +1,16 @@
 // ES6+ 문법을 사용한 예제
 import { Tracer } from "@racgoo/scry";
 
+class ClassTest {
+  test() {
+    return 1;
+  }
+  test2() {
+    this.test();
+    return 2;
+  }
+}
+
 const greeting = (name) => {
   return "Hello, " + name + "!";
 };
@@ -13,9 +23,11 @@ const processText = (text) => {
   return text.toUpperCase();
 };
 
+const classTest = new ClassTest();
+
 Tracer.start();
-for (let i = 0; i < 4; i++) {
-  console.log(processText(addExclamation(greeting("World"))));
-}
+
+processText(addExclamation(greeting("World")));
+classTest.test2();
 
 Tracer.end();
