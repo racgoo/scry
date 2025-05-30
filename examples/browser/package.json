@@ -4,13 +4,16 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "start": "npm i && npm run dev",
     "dev": "NODE_ENV=development vite",
+    "dev_reload": "NODE_ENV=development npm run reload && vite",
+    "reload": "rm -rf node_modules/ && npm i",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@racgoo/scry": "file:../../",
+    "@racgoo/scry": "file:../..",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

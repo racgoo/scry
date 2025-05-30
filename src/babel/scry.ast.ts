@@ -1,4 +1,5 @@
 import * as babel from "@babel/core";
+
 import {
   ScryAstVariable,
   TRACE_MARKER,
@@ -12,6 +13,152 @@ class ScryAst {
   private t: typeof babel.types;
   constructor(t: typeof babel.types) {
     this.t = t;
+  }
+
+  //Get origin code unique key with path(Current not used. but it's for future use. need archive origin code map)
+  public getOriginCodeKey(path: babel.NodePath<babel.types.CallExpression>) {
+    const callee = path.node.callee;
+    const loc = path.node.loc;
+    //Function Call
+    if (this.t.isIdentifier(callee)) {
+      return `${callee.name}:${loc?.filename}:${loc?.start.line}:${loc?.start.column}`;
+    }
+    //Method Call
+    if (
+      this.t.isMemberExpression(callee) &&
+      this.t.isIdentifier(callee.property)
+    ) {
+      const objectName = this.getObjectName(callee.object);
+      return `${objectName}.${callee.property.name}:${loc?.filename}:${loc?.start.line}:${loc?.start.column}`;
+    }
+    //Etc ..
+    return "";
+  }
+
+  //Get origin code from path
+  public getOriginCode(path: babel.NodePath<babel.types.CallExpression>): {
+    classCode: string;
+    originCode: string;
+  } {
+    const callee = path.node.callee;
+    let classCode = "";
+    let originCode = "";
+    // 메서드 호출 (this.method())
+    if (
+      this.t.isMemberExpression(callee) &&
+      this.t.isThisExpression(callee.object) &&
+      this.t.isIdentifier(callee.property)
+    ) {
+      // 현재 클래스의 메서드를 찾기
+      const classPath = path.findParent((p) => p.isClassDeclaration());
+      if (classPath) {
+        const classBody = (classPath.node as babel.types.ClassDeclaration).body;
+        const method = classBody.body.find(
+          (m): m is babel.types.ClassMethod =>
+            this.t.isClassMethod(m) &&
+            this.t.isIdentifier(m.key) &&
+            this.t.isIdentifier(callee.property) &&
+            m.key.name === callee.property.name
+        );
+
+        if (classPath?.node.loc) {
+          // 클래스 전체 코드 반환
+          classCode = this.extractCodeFromLoc(
+            path.hub.getCode() || "",
+            classPath.node.loc
+          );
+        }
+
+        if (method?.loc) {
+          originCode = this.extractCodeFromLoc(
+            path.hub.getCode() || "",
+            method.loc
+          );
+        }
+      }
+    }
+
+    // Identifier: function call
+    if (this.t.isIdentifier(callee)) {
+      const binding = path.scope.getBinding(callee.name);
+      if (binding?.path.node.loc) {
+        originCode = this.extractCodeFromLoc(
+          path.hub.getCode() || "",
+          binding.path.node.loc
+        );
+      }
+    }
+
+    // MemberExpression: method call
+    if (
+      this.t.isMemberExpression(callee) &&
+      this.t.isIdentifier(callee.property)
+    ) {
+      const objectName = this.getObjectName(callee.object);
+      const methodName = callee.property.name;
+
+      const objectBinding = path.scope.getBinding(objectName);
+      if (objectBinding?.path.isVariableDeclarator()) {
+        const init = objectBinding.path.node.init;
+
+        // 클래스 인스턴스인 경우
+        if (this.t.isNewExpression(init) && this.t.isIdentifier(init.callee)) {
+          const classBinding = path.scope.getBinding(init.callee.name);
+          if (classBinding?.path.isClassDeclaration()) {
+            // 클래스 전체 코드 저장
+            if (classBinding.path.node.loc) {
+              classCode = this.extractCodeFromLoc(
+                path.hub.getCode() || "",
+                classBinding.path.node.loc
+              );
+            }
+
+            // 메서드 코드 찾기
+            const method = classBinding.path.node.body.body.find(
+              (m) =>
+                this.t.isClassMethod(m) &&
+                this.t.isIdentifier(m.key, { name: methodName })
+            ) as babel.types.ClassMethod;
+
+            if (method?.loc) {
+              originCode = this.extractCodeFromLoc(
+                path.hub.getCode() || "",
+                method.loc
+              );
+            }
+          }
+        }
+        // 객체 리터럴 내부 메서드
+        if (this.t.isObjectExpression(init)) {
+          const prop = init.properties.find(
+            (p) =>
+              this.t.isObjectProperty(p) &&
+              this.t.isIdentifier(p.key, { name: methodName })
+          ) as babel.types.ObjectProperty;
+
+          if (
+            prop?.value &&
+            this.t.isFunctionExpression(prop.value) &&
+            prop.value.loc
+          ) {
+            originCode = this.extractCodeFromLoc(
+              path.hub.getCode() || "",
+              prop.value.loc
+            );
+          }
+        }
+      }
+    }
+
+    return { classCode, originCode };
+  }
+
+  //Extract code from location
+  private extractCodeFromLoc(code: string, loc: babel.types.SourceLocation) {
+    const lines = code.split("\n");
+    const start = loc.start.line - 1;
+    const end = loc.end.line - 1;
+    return lines.slice(start, end + 1).join("\n");
   }
 
   //Create ast marker variable
@@ -63,7 +210,7 @@ class ScryAst {
   }
 
   //Set ast currentTraceId to globalThis
-  public setCurrentTraceIdAsGlobalCurrentTraceId() {
+  public createCurrentTraceIdSetterAsGlobalCurrentTraceId() {
     return this.t.expressionStatement(
       this.t.assignmentExpression(
         "=",
@@ -77,7 +224,7 @@ class ScryAst {
   }
 
   //Set ast currentTraceId to globalThis
-  public setCurrentTraceIdAsGlobalParentTraceId() {
+  public craeteCurrentTraceIdSetterAsGlobalParentTraceId() {
     return this.t.expressionStatement(
       this.t.assignmentExpression(
         "=",
@@ -91,7 +238,7 @@ class ScryAst {
   }
 
   //Set ast parentTraceId to globalThis
-  public setParentTraceIdAsGlobalParentTraceId() {
+  public createParentTraceIdSetterAsGlobalParentTraceId() {
     return this.t.expressionStatement(
       this.t.assignmentExpression(
         "=",
@@ -105,7 +252,7 @@ class ScryAst {
   }
 
   //Get ast parentTraceId variable from globalThis
-  public getParentTraceId() {
+  public createParentTraceIdFromGlobalParentTraceId() {
     return this.t.variableDeclaration("const", [
       this.t.variableDeclarator(
         this.t.identifier("parentTraceId"),
@@ -132,7 +279,7 @@ class ScryAst {
   }
 
   //Update returnValue with origin execution
-  public updateReturnValueWithOriginExecution(
+  public craeteReturnValueUpdaterWithOriginExecution(
     path: babel.NodePath<babel.types.CallExpression>
   ) {
     const originalCall = path.node;
@@ -233,6 +380,8 @@ class ScryAst {
       type: TraceEventType;
       fnName: string;
       chained: boolean;
+      originCode: string;
+      classCode: string;
     }
   ) {
     return this.t.objectExpression([
@@ -243,6 +392,14 @@ class ScryAst {
       this.t.objectProperty(
         this.t.identifier(ScryAstVariable.name),
         this.t.stringLiteral(info.fnName)
+      ),
+      this.t.objectProperty(
+        this.t.identifier(ScryAstVariable.originCode),
+        this.t.stringLiteral(info.originCode)
+      ),
+      this.t.objectProperty(
+        this.t.identifier(ScryAstVariable.classCode),
+        this.t.stringLiteral(info.classCode)
       ),
       this.t.objectProperty(
         this.t.identifier(ScryAstVariable.traceId),
@@ -289,7 +446,7 @@ class ScryAst {
   }
 
   //Create args ast object
-  public getArgs(
+  private getArgs(
     path: babel.NodePath<babel.types.CallExpression>,
     state: babel.PluginPass
   ) {
@@ -344,7 +501,7 @@ class ScryAst {
   }
 
   //Create source ast object
-  public getSource(
+  private getSource(
     path: babel.NodePath<babel.types.CallExpression>,
     state: babel.PluginPass
   ) {
@@ -355,6 +512,16 @@ class ScryAst {
           : UNKNOWN_LOCATION
       }`
     );
+  }
+
+  //Get object name from object
+  private getObjectName(
+    object: babel.types.Expression | babel.types.Super
+  ): string {
+    if (this.t.isIdentifier(object)) {
+      return object.name;
+    }
+    return "";
   }
 }
 

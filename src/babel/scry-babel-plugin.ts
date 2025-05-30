@@ -61,6 +61,10 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
             const chained = scryChecker.isChainedFunction(path);
             //Extract function name
             const fnName = scryAst.getFunctionName(path);
+            //Extract origin function code
+            const { classCode, originCode } = scryAst.getOriginCode(path);
+            //Extract origin code key(not used. but it's for future use. need archive origin code map)
+            // const originCodeKey = scryAst.getOriginCodeKey(path);
 
             //Generate new node (with marker comment)
             const newNode = t.callExpression(
@@ -73,34 +77,38 @@ function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
                   //Create traceId
                   scryAst.createTraceId(),
                   //Update global currentTraceId
-                  scryAst.setCurrentTraceIdAsGlobalCurrentTraceId(),
-                  //Get parent traceId (default to null)
-                  scryAst.getParentTraceId(),
+                  scryAst.createCurrentTraceIdSetterAsGlobalCurrentTraceId(),
+                  //Create parent traceId (default to null)
+                  scryAst.createParentTraceIdFromGlobalParentTraceId(),
                   //Generate 'enter' event
                   t.expressionStatement(
                     scryAst.emitTraceEvent(
                       scryAst.getEventDetail(path, state, {
                         type: "enter",
                         fnName,
+                        originCode,
+                        classCode,
                         chained,
                       })
                     )
                   ),
 
                   //Set current traceId as parent traceId
-                  scryAst.setCurrentTraceIdAsGlobalParentTraceId(),
+                  scryAst.craeteCurrentTraceIdSetterAsGlobalParentTraceId(),
                   //Create returnValue
                   scryAst.createReturnValue(),
                   //Update returnValue with origin execution
-                  scryAst.updateReturnValueWithOriginExecution(path),
+                  scryAst.craeteReturnValueUpdaterWithOriginExecution(path),
                   //Restore parent traceId
-                  scryAst.setParentTraceIdAsGlobalParentTraceId(),
+                  scryAst.createParentTraceIdSetterAsGlobalParentTraceId(),
                   //Generate 'exit' event
                   t.expressionStatement(
                     scryAst.emitTraceEvent(
                       scryAst.getEventDetail(path, state, {
                         type: "exit",
                         fnName,
+                        originCode,
+                        classCode,
                         chained,
                       })
                     )

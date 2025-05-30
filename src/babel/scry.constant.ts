@@ -17,6 +17,8 @@ export const ScryAstVariable = {
   source: "source",
   type: "type",
   name: "name",
+  originCode: "originCode",
+  classCode: "classCode",
   chained: "chained",
   globalThis: "globalThis",
   globalScryCalledCount: "__globalScryCalledCount",

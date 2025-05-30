@@ -1,7 +1,6 @@
 import Output from "@utils/output";
 import Format from "@tracer/format";
 import { TRACE_EVENT_NAME } from "@babel/scry.constant";
-import Transformer from "@utils/transformer";
 import Environment from "@utils/enviroment";
 
 //Tracer class. for single instance.
@@ -61,11 +60,14 @@ class Tracer {
     Output.print("Tracing is ended");
     //Make trace tree(hierarchical tree structure by call)
     const traceNodes = this.makeTraceNodes(this.details);
+
     //Make display result(for formatting)
-    const displayResult = this.makeDisplayResult(traceNodes);
+    const detailResult = this.makeDetailResult(traceNodes);
+
     //Save result in file
+    const htmlRoot = Format.generateHtmlRoot(detailResult);
+
     if (Environment.isNodeJS()) {
-      const htmlRoot = Format.generateHtmlRoot(displayResult);
       import("fs").then((fs) => {
         if (!fs.existsSync("scry")) {
           fs.mkdirSync("scry");
@@ -74,14 +76,11 @@ class Tracer {
       });
     }
 
-    //Display result in browser
+    //Open tracing result window
     if (!Environment.isNodeJS()) {
-      for (let i = 0; i < displayResult.length; i++) {
-        //hide detail link
-        console.groupCollapsed(displayResult[i].title);
-        console.log(displayResult[i].url);
-        console.groupEnd();
-      }
+      const blob = new Blob([htmlRoot], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
     }
 
     //Clear settings
@@ -105,7 +104,7 @@ class Tracer {
   private makeTraceNodes(details: Detail[]): TraceNode[] {
     //Root TraceNodes (root can be multiple)
     //ex) Trace.start() foo() bar()  Trace.end()
-    // traceNodes = [ foo-node, bar-node]
+    // traceNodes = [ foo-node, bar-node]\
     const traceNodes: TraceNode[] = [];
     //Map for TraceNode(indexed by traceId)
     const nodeMap = new Map<string, TraceNode>();
@@ -124,6 +123,8 @@ class Tracer {
           traceId: detail.traceId,
           name: detail.name,
           source: detail.source,
+          originCode: detail.originCode,
+          classCode: detail.classCode,
           args: detail.args || [],
           children: [],
           completed: false,
@@ -178,22 +179,18 @@ class Tracer {
   }
 
   //Make display result(for console)
-  private makeDisplayResult(
+  private makeDetailResult(
     traceNodes: TraceNode[],
     depth = 0
-  ): DisplayResult[] {
-    const result: DisplayResult[] = [];
+  ): DisplayDetailResult[] {
+    const result: DisplayDetailResult[] = [];
     //Iterate traceNodes(they are root nodes)
     for (const node of traceNodes) {
       //Indent and prefix for display
       const indent = "ㅤㅤ".repeat(depth);
-      const prefix = depth > 0 ? "└─ " : "";
+      const prefix = depth > 0 ? "⤷ " : "";
       //Generate html content
       const htmlContent = Format.generateHtmlContent(node);
-      //Generate data url
-      const dataUrl = `data:text/html;base64,${Transformer.toBase64(
-        htmlContent
-      )}`;
       //Generate args string
       const args = node.args.map((arg) => JSON.stringify(arg)).join(", ");
       //Save to result
@@ -201,11 +198,12 @@ class Tracer {
         title: `${indent}${prefix}${node.name}(${args}) ${
           node.errored ? "⚠️Error⚠️" : ""
         }`,
-        url: dataUrl,
+        //HTM: detail page
+        html: htmlContent,
       });
       //Recursive call for children
       if (node.children?.length > 0) {
-        result.push(...this.makeDisplayResult(node.children, depth + 1));
+        result.push(...this.makeDetailResult(node.children, depth + 1));
       }
     }
     return result;
