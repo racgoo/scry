@@ -41,6 +41,7 @@ Scry helps you clearly understand complex code flow and analyze relationships be
 #### Dual Package Support
 - This library provides dual package distribution with automatic module resolution:
 
+---
 
 ## Features
 
