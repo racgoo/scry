@@ -1,6 +1,6 @@
-import Environment from "@/utils/enviroment";
+import { Environment } from "../utils/enviroment.js";
 import * as babel from "@babel/core";
-import { DEVELOPMENT_MODE, TRACE_MARKER } from "@babel/scry.constant";
+import { DEVELOPMENT_MODE, TRACE_MARKER } from "./scry.constant.js";
 
 //Checkers for scry babel plugin
 class ScryChecker {

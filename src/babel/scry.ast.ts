@@ -6,7 +6,7 @@ import {
   TRACE_EVENT_NAME,
   ANONYMOUS_FUNCTION_NAME,
   UNKNOWN_LOCATION,
-} from "@babel/scry.constant";
+} from "./scry.constant.js";
 
 //AST generators for scry babel plugin
 class ScryAst {

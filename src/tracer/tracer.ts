@@ -1,7 +1,7 @@
-import Output from "@utils/output";
-import Format from "@tracer/format";
-import { TRACE_EVENT_NAME } from "@babel/scry.constant";
-import Environment from "@utils/enviroment";
+import { Output } from "../utils/output.js";
+import Format from "./format.js";
+import { TRACE_EVENT_NAME } from "../babel/scry.constant.js";
+import { Environment } from "../utils/enviroment.js";
 
 //Tracer class. for single instance.
 class Tracer {

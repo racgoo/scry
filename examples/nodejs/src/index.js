@@ -1,4 +1,3 @@
-// ES6+ 문법을 사용한 예제
 import { Tracer } from "@racgoo/scry";
 
 class ClassTest {
@@ -6,7 +5,9 @@ class ClassTest {
     return 1;
   }
   test2() {
-    this.test();
+    for (let i = 0; i < 10; i++) {
+      this.test();
+    }
     return 2;
   }
 }

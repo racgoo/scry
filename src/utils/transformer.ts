@@ -1,4 +1,4 @@
-import Environment from "@utils/enviroment";
+import { Environment } from "./enviroment.js";
 
 //Transformer class. for single instance.
 class Transformer {
@@ -16,4 +16,4 @@ class Transformer {
   }
 }
 
-export default Transformer;
+export { Transformer };

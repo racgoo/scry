@@ -6,4 +6,4 @@ class Environment {
   }
 }
 
-export default Environment;
+export { Environment };

@@ -1,7 +1,7 @@
 import * as babel from "@babel/core";
-import ScryAst from "@babel/scry.ast";
-import ScryChecker from "@babel/scry.check";
-import { ScryAstVariable, TRACE_MARKER } from "@babel/scry.constant";
+import ScryAst from "./scry.ast.js";
+import ScryChecker from "./scry.check.js";
+import { ScryAstVariable, TRACE_MARKER } from "./scry.constant.js";
 
 function scryBabelPlugin({ types: t }: { types: typeof babel.types }) {
   return {
