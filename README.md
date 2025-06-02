@@ -3,7 +3,7 @@
 # **JavaScript/TypeScript execution flow tracking debugging tools**
 
 <div align="center">
-  <img src="https://img.shields.io/badge/version-0.0.37-blue.svg" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-0.0.38-blue.svg" alt="Version"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/>
 </div>
@@ -27,6 +27,20 @@ It was created to ease the pain of debugging unexpected runtime errors and unhel
 Scry helps you clearly understand complex code flow and analyze relationships between function calls with precision.
 
 ---
+
+## Supports
+
+#### Runtime Environments
+- Node.js - Server-side JavaScript runtime
+- Browser - Modern web browsers with ES2018+ support
+
+#### Module Systems
+- CommonJS (CJS) - Traditional Node.js module system using require() and module.exports
+- ES Modules (ESM) - Modern JavaScript module system using import and export
+
+#### Dual Package Support
+- This library provides dual package distribution with automatic module resolution:
+
 
 ## Features
 
@@ -82,8 +96,10 @@ import { scryBabelPlugin } from "@racgoo/scry";
 If setting things up feels difficult, please refer to the "examples" in the GitHub repository.
 
 ----------------------------------------------------------------------
-
 #vite example (vite.config.js)
+
+!! ESM and CJS have identical execution behavior when using bundlers like Vite,
+with the module system determined by package.json type configuration ("module" or "commonjs").
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { scryBabelPlugin } from "@racgoo/scry";
@@ -102,11 +118,18 @@ export default defineConfig({
 });
 
 ----------------------------------------------------------------------
-
 #nodejs example (babel.config.js)
-import { scryBabelPlugin } from "@racgoo/scry";
 
+1. ESM module system.(package.json.type === "module")
+import { scryBabelPlugin } from "@racgoo/scry"; 
 export default {
+  presets: [],
+  plugins: [scryBabelPlugin],
+};
+
+2. CJS module system.(package.json.type === "commonjs")
+const { scryBabelPlugin } = require("@racgoo/scry");
+module.exports = {
   presets: [],
   plugins: [scryBabelPlugin],
 };
@@ -146,7 +169,7 @@ Tracer.end();
 
 Further improvements are underway to better validate and track function parameters and return values, especially for complex nodes such as `BinaryExpression`, `CallExpression`, and others.
 
-#### Async Function Support
+#### Async Function Support(~ing. comming soon:)
 
 Tracing for `asynchronous functions` is not yet implemented. Development is currently in progress.
 
