@@ -38,7 +38,7 @@ class Tracer {
     Output.print("Tracer is started");
   }
 
-  //end tracing
+  //End tracing
   end() {
     if (!this.isTracing) {
       Output.printError(
