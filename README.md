@@ -49,9 +49,9 @@ Scry helps you clearly understand complex code flow and analyze relationships be
 
 - Automatic tracking of function names and call stacks
 
-- Compatible with Node.js and browser environments.
-In the Browser, trace results are displayed directly in the console with a clickable link to view them in a new tab.
-In Node.js, results are saved as a current-trace.html file in the scry folder at the project root, which you can open in a browser to view the trace.
+- Compatible with both Node.js and browser environments.
+In the browser, trace results are displayed directly in the console with a clickable link that opens the visual report in a new tab.
+In Node.js, trace results are saved as `HTML` files under the scry/report folder at the project root. The report is `automatically opened` in a new browser tab upon execution, providing immediate visual feedback.
 
 ---
 
@@ -60,7 +60,7 @@ In Node.js, results are saved as a current-trace.html file in the scry folder at
   Automatically opens the trace result page in a **new browser tab** when tracing is complete.
 
 - #### Node.js  
-  Saves the trace result as `scry/current-trace.html` at the project root — open it manually in a browser to view.
+  Saves the trace result as an HTML file under the scry/report folder at the project root. The report opens automatically in a `new browser tab` upon execution for immediate visual inspection.
 
 
 -  #### Report (WebUI)
