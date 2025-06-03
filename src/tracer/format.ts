@@ -1,7 +1,13 @@
+import dayjs from "dayjs";
+
 //data formatter for trace result
 class Format {
   //Generate html root for trace result(zip all trace result)
-  static generateHtmlRoot(items: DisplayDetailResult[]): string {
+  static generateHtmlRoot(
+    items: DisplayDetailResult[],
+    startTime: dayjs.Dayjs,
+    duration: number
+  ): string {
     return `
       <!DOCTYPE html>
       <html>
@@ -353,6 +359,28 @@ class Format {
             .badge svg {
               flex-shrink: 0;
             }
+
+            .time-info {
+              display: flex;
+              gap: 2rem;
+              margin-top: 1rem;
+              padding-top: 1rem;
+              border-top: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .time-item {
+              display: flex;
+              align-items: center;
+              gap: 0.5rem;
+              color: var(--text-secondary);
+              font-size: 0.875rem;
+              font-weight: 500;
+            }
+
+            .time-item svg {
+              color: var(--primary-light);
+              flex-shrink: 0;
+            }
           </style>
         </head>
         <body>
@@ -365,6 +393,27 @@ class Format {
                 Scry Trace Results
               </h1>
               <div class="subtitle">Visualize your code's execution journey with precision and elegance</div>
+              <div class="time-info">
+                <div class="time-item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12,6 12,12 16,14"/>
+                  </svg>
+                  <span>Started: ${startTime.format(
+                    "YYYY-MM-DD HH:mm:ss"
+                  )}(system time)</span>
+                </div>
+                <div class="time-item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                  </svg>
+                  <span>Duration: ${
+                    duration < 1000
+                      ? `${duration}ms`
+                      : `${(duration / 1000).toFixed(2)}s`
+                  }</span>
+                </div>
+              </div>
               <div class="header-links">
                 <a href="https://github.com/racgoo/scry" target="_blank" class="header-link">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

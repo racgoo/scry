@@ -2,14 +2,16 @@ import { Output } from "../utils/output.js";
 import Format from "./format.js";
 import { TRACE_EVENT_NAME } from "../babel/scry.constant.js";
 import { Environment } from "../utils/enviroment.js";
+import dayjs from "dayjs";
 
 //Tracer class. for single instance.
 class Tracer {
   private isTracing = false;
   //Trace details(like stack trace)
   private details: Detail[] = [];
-  private timestamp: number = 0;
-  //Trace duration(not used)
+  //Trace start time(dayjs)
+  private startTime: dayjs.Dayjs = dayjs();
+  //Trace duration(ms)
   private duration: number = 0;
   //Bind onTrace function(for static method call)
   private boundOnTrace = this.onTrace.bind(this) as EventListener;
@@ -24,8 +26,7 @@ class Tracer {
     }
     this.isTracing = true;
     //Init start time
-    const now = Date.now();
-    this.timestamp = now;
+    this.startTime = dayjs();
     //Register event listener according to the execution environment
     if (Environment.isNodeJS()) {
       //Nodejs use process event
@@ -56,7 +57,7 @@ class Tracer {
       globalThis.removeEventListener(TRACE_EVENT_NAME, this.boundOnTrace);
     }
     //Update duration
-    this.duration = Date.now() - this.timestamp;
+    this.duration = dayjs().diff(this.startTime, "ms");
     Output.print("Tracing is ended");
     //Make trace tree(hierarchical tree structure by call)
     const traceNodes = this.makeTraceNodes(this.details);
@@ -65,14 +66,30 @@ class Tracer {
     const detailResult = this.makeDetailResult(traceNodes);
 
     //Save result in file
-    const htmlRoot = Format.generateHtmlRoot(detailResult);
+    const htmlRoot = Format.generateHtmlRoot(
+      detailResult,
+      this.startTime,
+      this.duration
+    );
 
     if (Environment.isNodeJS()) {
-      import("fs").then((fs) => {
+      import("fs").then(async (fs) => {
+        //Create scry directory if not exists
         if (!fs.existsSync("scry")) {
           fs.mkdirSync("scry");
         }
-        fs.writeFileSync("scry/curernt-trace.html", htmlRoot);
+        //Create report directory if not exists
+        if (!fs.existsSync("scry/report")) {
+          fs.mkdirSync("scry/report");
+        }
+        //Trace end date
+        const now = dayjs().format("YYYY-MM-DD_HH-mm-ss");
+        //File path for result
+        const filePath = `scry/report/TraceResult:${now}.html`;
+        fs.writeFileSync(filePath, htmlRoot);
+
+        //Open result html with browser
+        Output.openBrowser(filePath);
       });
     }
 
@@ -80,7 +97,8 @@ class Tracer {
     if (!Environment.isNodeJS()) {
       const blob = new Blob([htmlRoot], { type: "text/html" });
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
+      //Open result html with browser
+      Output.openBrowser(url);
     }
 
     //Clear settings
@@ -195,9 +213,10 @@ class Tracer {
       const args = node.args.map((arg) => JSON.stringify(arg)).join(", ");
       //Save to result
       result.push({
+        //Title text
         title: `${indent}${prefix}${node.name}(${args}) ${
           node.errored ? "⚠️Error⚠️" : ""
-        }`,
+        } [${node.classCode ? "method" : "function"}]`,
         //HTM: detail page
         html: htmlContent,
       });
@@ -213,7 +232,7 @@ class Tracer {
   private resetSettings() {
     this.isTracing = false;
     this.details = [];
-    this.timestamp = 0;
+    this.startTime = dayjs();
     this.duration = 0;
   }
 }
