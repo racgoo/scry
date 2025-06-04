@@ -1,5 +1,16 @@
 import { Tracer } from "@racgoo/scry";
 
+async function asyncTest2(flag) {
+  return new Promise((resolve) => setTimeout(resolve, 1000));
+}
+
+async function asyncTest(falg) {
+  console.log("asyncTest");
+  await asyncTest2("2");
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  return "hi";
+}
+
 class ClassTest {
   test() {
     return 1;
@@ -28,7 +39,8 @@ const classTest = new ClassTest();
 
 Tracer.start();
 
-processText(addExclamation(greeting("World")));
-classTest.test2();
+// processText(addExclamation(greeting("World")));
+// classTest.test2();
+asyncTest("1");
 
 Tracer.end();

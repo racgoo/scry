@@ -4,41 +4,59 @@ import "./App.css";
 import { Tracer } from "@racgoo/scry";
 
 class ClassTest {
-  public test() {
+  constructor() {
+    console.log("ClassTest constructor");
+  }
+  public method1() {
     return 1;
   }
-  public test2() {
-    return this.test();
+  public method2() {
+    return this.method1();
   }
 }
+async function asyncTest() {
+  const a = new ClassTest();
+  a.method2();
 
-function foo1(x: number) {
-  foo2(x);
-  return x * 2;
+  // await asyncTest2();
+  // await asyncTest2();
+  // return 20;
 }
 
-function foo2(z: number) {
-  return z * 2;
+function ft1() {
+  return 1;
 }
 
-function baz(test: { a: number }) {
-  return test.a;
-}
+function ft2() {}
 
-function bar({ y }: { y: number }) {
-  foo1(foo2(2));
-  foo2(y + 3);
-  baz({ a: 1 });
-}
+// function foo1(x: number) {
+//   foo2(x);
+//   return x * 2;
+// }
+
+// function foo2(z: number) {
+//   return z * 2;
+// }
+
+// function baz(test: { a: number }) {
+//   return test.a;
+// }
+
+// function bar({ y }: { y: number }) {
+//   foo1(foo2(2));
+//   foo2(y + 3);
+//   baz({ a: 1 });
+// }
 
 function App() {
   function test() {
-    const classTest = new ClassTest();
+    // const classTest = new ClassTest();
 
     Tracer.start();
+    asyncTest();
 
-    bar({ y: 5 });
-    classTest.test2();
+    // bar({ y: 5 });
+    // classTest.test2();
 
     Tracer.end();
   }

@@ -25,7 +25,9 @@ class ScryChecker {
   }
 
   //Check if the function is a chained function
-  public isChainedFunction(path: babel.NodePath<babel.types.CallExpression>) {
+  public isChainedFunction(
+    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
+  ) {
     const callee = path.node.callee;
     return (
       this.t.isMemberExpression(callee) &&
@@ -34,7 +36,9 @@ class ScryChecker {
   }
 
   //Check if the function is a pre-processed function
-  public isDuplicateFunction(path: babel.NodePath<babel.types.CallExpression>) {
+  public isDuplicateFunction(
+    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
+  ) {
     const callee = path.node.callee;
     return (
       this.t.isArrowFunctionExpression(callee) ||
@@ -45,7 +49,9 @@ class ScryChecker {
   }
 
   //Check if the function is a JSX function
-  public isJSX(path: babel.NodePath<babel.types.CallExpression>) {
+  public isJSX(
+    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
+  ) {
     const callee = path.node.callee;
     return (
       (this.t.isIdentifier(callee) && callee.name.startsWith("_jsx")) ||

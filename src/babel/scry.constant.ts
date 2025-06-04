@@ -1,4 +1,5 @@
 export const TRACE_MARKER = "__SCRY_MARK__";
+export const ARGUMENT_MARKER = "__SCRY_ARG_MARK__";
 export const TRACE_EVENT_NAME = "scry:trace";
 export const ANONYMOUS_FUNCTION_NAME = "AnonymousFunction";
 export const UNKNOWN_LOCATION = "UnknownLocation";
