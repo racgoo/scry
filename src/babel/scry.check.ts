@@ -1,12 +1,62 @@
 import { Environment } from "../utils/enviroment.js";
 import * as babel from "@babel/core";
-import { DEVELOPMENT_MODE, TRACE_MARKER } from "./scry.constant.js";
+import { DEVELOPMENT_MODE, TRACE_MARKER, TRACE_ZONE } from "./scry.constant.js";
 
 //Checkers for scry babel plugin
 class ScryChecker {
   private t: typeof babel.types;
   constructor(t: typeof babel.types) {
     this.t = t;
+  }
+
+  public isReactDOMCall(
+    node: babel.types.CallExpression | babel.types.NewExpression
+  ): boolean {
+    const callee = node.callee;
+    if (!this.t.isMemberExpression(callee)) return false;
+
+    return (
+      this.t.isIdentifier(callee.object) &&
+      (callee.object.name === "ReactDOM" ||
+        callee.object.name === "ReactDOMClient") &&
+      this.t.isIdentifier(callee.property) &&
+      callee.property.name === "createRoot"
+    );
+  }
+
+  public isTraceZoneInitialization(node: babel.types.Node): boolean {
+    if (!this.t.isCallExpression(node)) return false;
+
+    const callee = node.callee;
+    if (!this.t.isMemberExpression(callee)) return false;
+
+    // Zone.current.fork() 패턴 확인
+    if (
+      this.t.isMemberExpression(callee.object) &&
+      this.t.isIdentifier(callee.object.object) &&
+      callee.object.object.name === "Zone" &&
+      this.t.isIdentifier(callee.object.property) &&
+      callee.object.property.name === "current" &&
+      this.t.isIdentifier(callee.property) &&
+      callee.property.name === "fork"
+    ) {
+      // TRACE_ZONE 초기화 코드인지 확인
+      const args = node.arguments[0];
+      if (
+        this.t.isObjectExpression(args) &&
+        args.properties.some(
+          (prop) =>
+            this.t.isObjectProperty(prop) &&
+            this.t.isIdentifier(prop.key) &&
+            prop.key.name === "name" &&
+            this.t.isStringLiteral(prop.value) &&
+            prop.value.value === TRACE_ZONE
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
   }
 
   //Check if the file is a node module

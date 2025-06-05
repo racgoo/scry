@@ -7,15 +7,23 @@ class ClassTest {
   constructor() {
     console.log("ClassTest constructor");
   }
-  public method1() {
-    return 1;
+  public method1(random: number): Promise<number> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        console.log("method1", random);
+        resolve(random);
+        console.log("resolve end!");
+      }, random * 10);
+    });
   }
   public method2() {
-    return this.method1();
+    const random = Math.floor(Math.random() * 100);
+    return this.method1(random);
   }
 }
 async function asyncTest() {
   const a = new ClassTest();
+  a.method2();
   a.method2();
 
   // await asyncTest2();
@@ -48,12 +56,61 @@ function ft2() {}
 //   baz({ a: 1 });
 // }
 
+class ComplexTest {
+  private instance: ClassTest;
+
+  constructor() {
+    console.log("ComplexTest constructor");
+    this.instance = new ClassTest();
+  }
+
+  private async chainedCall(depth: number): Promise<number> {
+    if (depth <= 0) return 0;
+
+    const result = await this.instance.method2();
+    const nextResult = await this.chainedCall(depth - 1);
+
+    return result + nextResult;
+  }
+
+  public async start() {
+    console.log("Starting complex test");
+
+    // 병렬 실행
+    const results = await Promise.all([
+      this.chainedCall(3), // 3번 중첩 호출
+      this.instance.method2(),
+      new Promise((resolve) => setTimeout(() => resolve(42), 500)),
+    ]);
+
+    console.log("All results:", results);
+    return results.reduce((a, b) => Number(a) + Number(b), 0);
+  }
+}
+
+async function superComplexTest() {
+  const complex = new ComplexTest();
+  const result = await complex.start();
+
+  // 마지막 테스트
+  const classTest = new ClassTest();
+  await classTest.method2();
+
+  console.log("Final result:", result);
+  return result;
+}
+
+// 실행
+
 function App() {
   function test() {
     // const classTest = new ClassTest();
 
     Tracer.start();
     asyncTest();
+    superComplexTest().then(() => {
+      console.log("Everything completed!");
+    });
 
     // bar({ y: 5 });
     // classTest.test2();

@@ -148,17 +148,24 @@ class Format {
             }
 
             .trace-item {
+              display: flex;
+              align-items: center;
+              padding: 0.75rem 1rem;
+              height: auto;
+              min-height: 3rem;
               background: var(--card-bg);
               border-radius: 8px;
-              padding: 0.75rem 1rem;
-              height: 3rem;
-              cursor: pointer;
               border: 1px solid var(--border-color);
-              transition: all 0.3s ease;
+              transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+              margin-left: calc(var(--depth, 0) * 20px);
+            }
+
+            .item-content {
               display: flex;
               align-items: center;
               gap: 0.75rem;
-              width: 100%;
+              flex: 1;
+              cursor: pointer;
             }
 
             .trace-item:hover {
@@ -381,6 +388,64 @@ class Format {
               color: var(--primary-light);
               flex-shrink: 0;
             }
+
+            .trace-controls {
+              min-width: 24px;
+              height: 24px;
+              display: flex;
+              align-items: center;
+              margin-right: 8px;
+              background: rgba(255, 255, 255, 0.1);
+              border-radius: 4px;
+              padding: 2px;
+            }
+
+            .collapse-btn {
+              width: 24px;
+              height: 24px;
+              background: none;
+              border: none;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: var(--text-primary);
+              padding: 0;
+              opacity: 0.7;
+              transition: all 0.2s ease;
+            }
+
+            .collapse-btn:hover {
+              opacity: 1;
+              transform: scale(1.1);
+            }
+
+            .collapse-btn svg {
+              width: 16px;
+              height: 16px;
+              transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+              transform: rotate(0);
+            }
+
+            .collapse-btn.collapsed svg {
+              transform: rotate(-90deg);
+            }
+
+            .trace-item.nested.hidden {
+              display: none !important;
+              height: 0 !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              opacity: 0;
+              pointer-events: none;
+              border: none;
+              overflow: hidden;
+            }
+
+            /* 추가: 연속된 hidden 아이템들 사이의 gap 제거 */
+            .trace-item.nested.hidden + .trace-item.nested.hidden {
+              margin-top: -0.5rem;
+            }
           </style>
         </head>
         <body>
@@ -434,18 +499,31 @@ class Format {
 
             <div class="trace-list">
               ${items
-                .map(
-                  (item, index) => `
-                <div class="trace-item" onclick="showModal(${index})" style="--delay: ${index}">
-                  <div class="trace-icon">
-                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                    </svg>
+                .map((item, index) => {
+                  return `
+                  <div class="trace-item ${item.depth >= 0 ? "nested" : ""}" 
+                       data-level="${item.depth}"
+                       style="--depth: ${item.depth}">
+                    <div class="trace-controls">
+                      <button class="collapse-btn" onclick="collapseTrace(event, ${
+                        item.depth
+                      })">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" pointer-events="none">
+                          <path d="M19 9l-7 7-7-7" pointer-events="none"/>
+                        </svg>
+                      </button>
+                    </div>
+                    <div class="item-content" onclick="showModal(${index})">
+                      <div class="trace-icon">
+                        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                      </div>
+                      <span class="trace-name">${item.title}</span>
+                    </div>
                   </div>
-                  <span class="trace-name">${item.title}</span>
-                </div>
-              `
-                )
+                `;
+                })
                 .join("")}
             </div>
           </div>
@@ -462,7 +540,7 @@ class Format {
           </div>
 
           <script>
-            const items = ${JSON.stringify(items)};
+            const items = ${this.parseJson(items)};
             
             function showModal(index) {
               const modal = document.getElementById('modal');
@@ -486,6 +564,51 @@ class Format {
             });
 
             hljs.highlightAll();
+
+            function collapseTrace(event, level) {
+              event.preventDefault();
+              event.stopPropagation();
+              
+              const button = event.currentTarget;
+              const isCollapsing = !button.classList.contains('collapsed');
+              button.classList.toggle('collapsed');
+              
+              const currentItem = button.closest('.trace-item');
+              let next = currentItem.nextElementSibling;
+              
+              while (next) {
+                const nextLevel = parseInt(next.dataset.level);
+                if (nextLevel <= level) break;
+                
+                if (isCollapsing) {
+                  // 닫을 때: 현재 레벨보다 깊은 모든 항목을 숨김
+                  next.classList.add('hidden');
+                } else {
+                  // 열 때: 직계 자식만 보이게 하고, 나머지는 부모의 상태를 따라감
+                  if (nextLevel === level + 1) {
+                    next.classList.remove('hidden');
+                  } else {
+                    // 직계 자식이 아닌 경우, 모든 부모의 상태를 확인
+                    let parent = next.previousElementSibling;
+                    let shouldShow = true;
+                    
+                    while (parent && parseInt(parent.dataset.level) > level) {
+                      const parentButton = parent.querySelector('.collapse-btn');
+                      if (parentButton?.classList.contains('collapsed')) {
+                        shouldShow = false;
+                        break;
+                      }
+                      parent = parent.previousElementSibling;
+                    }
+                    
+                    if (shouldShow) {
+                      next.classList.remove('hidden');
+                    }
+                  }
+                }
+                next = next.nextElementSibling;
+              }
+            }
           </script>
         </body>
       </html>
@@ -540,7 +663,9 @@ class Format {
             </div>
             <div class="section-content">
               <pre><code class="language-javascript">${
-                node.originCode || "Source code not available"
+                node.classCode
+                  ? node.methodCode
+                  : node.functionCode || "Source code not available"
               }</code></pre>
             </div>
           </div>
@@ -569,16 +694,15 @@ class Format {
             <div class="section-header">
               <div class="section-title">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M22 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/>
+                  <circle cx="12" cy="10" r="3" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
                 Arguments
               </div>
             </div>
             <div class="section-content">
-              <pre><code class="language-json">${JSON.stringify(
-                node.args,
-                null,
-                2
+              <pre><code class="language-json">${this.parseJson(
+                node.args
               )}</code></pre>
             </div>
           </div>
@@ -622,8 +746,38 @@ class Format {
   private static parseReturnValue(returnValue: unknown): string {
     if (returnValue instanceof Error) {
       return returnValue.stack || returnValue.message;
+    } else if (returnValue instanceof Promise) {
+      return "[Promise]"; // Promise는 단순히 '[Promise]'로 표시
+    } else {
+      return JSON.stringify(returnValue, (key, value) => {
+        if (
+          value &&
+          typeof value === "object" &&
+          (value.constructor?.name?.includes("Zone") ||
+            key.includes("zone") ||
+            key.includes("Zone"))
+        ) {
+          return "[Zone Object]";
+        }
+        return value;
+      });
     }
-    return JSON.stringify(returnValue);
+  }
+
+  public static parseJson(value: unknown): string {
+    return JSON.stringify(value, (key, value) => {
+      // Zone 관련 객체인지 확인
+      if (
+        value &&
+        typeof value === "object" &&
+        (value.constructor?.name?.includes("Zone") ||
+          key.includes("zone") ||
+          key.includes("Zone"))
+      ) {
+        return "[Zone Object]";
+      }
+      return value;
+    });
   }
 }
 

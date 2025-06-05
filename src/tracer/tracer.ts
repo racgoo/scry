@@ -55,15 +55,19 @@ class Tracer {
         .filter((detail) => detail.type === "exit")
         .filter((returnValue) => returnValue instanceof Promise);
       const results = await Promise.allSettled(promiseWaits);
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       if (results.every((promise) => promise.status === "fulfilled")) {
         break;
       }
     }
+
+    console.log(this.details);
     //Make trace tree(hierarchical tree structure by call)
     const traceNodes: TraceNode[] = this.makeTraceNodes(this.details);
+    console.log("hi1");
     //Update duration
     this.duration = dayjs().diff(this.startTime, "ms");
+    console.log("hi2");
     //Remove event listener according to the execution environment
     if (Environment.isNodeJS()) {
       //Nodejs use process event
@@ -75,7 +79,9 @@ class Tracer {
 
     // await Promise.allSettled(traceNodes.map((node) => node.returnValue));
     //Make display result(for formatting)
+    console.log("hi3");
     const detailResult = this.makeDetailResult(traceNodes);
+    console.log("hi4");
     //Save result in file
     const htmlRoot = Format.generateHtmlRoot(
       detailResult,
@@ -143,7 +149,8 @@ class Tracer {
           traceId: detail.traceId,
           name: detail.name,
           source: detail.source,
-          originCode: detail.originCode,
+          functionCode: detail.functionCode,
+          methodCode: detail.methodCode,
           classCode: detail.classCode,
           args: detail.args || [],
           children: [],
@@ -192,12 +199,14 @@ class Tracer {
     //Iterate traceNodes(they are root nodes)
     for (const node of traceNodes) {
       //Indent and prefix for display
-      const indent = "ㅤㅤ".repeat(depth);
-      const prefix = depth > 0 ? "⤷ " : "";
+      // const indent = "ㅤㅤ".repeat(depth);
+      const indent = "ㅤ";
+      // const prefix = depth > 0 ? "⤷ " : "";
+      const prefix = "ㅤ";
       //Generate html content
       const htmlContent = Format.generateHtmlContent(node);
       //Generate args string
-      const args = node.args.map((arg) => JSON.stringify(arg)).join(", ");
+      const args = node.args.map((arg) => Format.parseJson(arg)).join(", ");
       //Save to result
       result.push({
         //Title text
@@ -206,6 +215,7 @@ class Tracer {
         } [${node.classCode ? "method" : "function"}]`,
         //HTM: detail page
         html: htmlContent,
+        depth: depth,
       });
       //Recursive call for children
       if (node.children?.length > 0) {

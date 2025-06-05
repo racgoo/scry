@@ -4,6 +4,7 @@ export const TRACE_EVENT_NAME = "scry:trace";
 export const ANONYMOUS_FUNCTION_NAME = "AnonymousFunction";
 export const UNKNOWN_LOCATION = "UnknownLocation";
 export const DEVELOPMENT_MODE = "development";
+export const TRACE_ZONE = "TraceZone";
 
 export const ScryEventType = {
   enter: "enter",
@@ -18,11 +19,13 @@ export const ScryAstVariable = {
   source: "source",
   type: "type",
   name: "name",
-  originCode: "originCode",
-  classCode: "classCode",
   chained: "chained",
   globalThis: "globalThis",
   globalScryCalledCount: "__globalScryCalledCount",
   globalCurrentTraceId: "__globalCurrentTraceId",
   globalParentTraceId: "__globalParentTraceId",
+  code: "code",
+  functionCode: "functionCode",
+  classCode: "classCode",
+  methodCode: "methodCode",
 };

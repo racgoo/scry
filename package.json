@@ -61,6 +61,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "dayjs": "^1.11.13"
+    "dayjs": "^1.11.13",
+    "zone.js": "^0.15.1"
   }
 }
