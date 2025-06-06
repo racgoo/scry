@@ -47,10 +47,9 @@ class Tracer {
       );
       return;
     }
-
     //Wait for all return values to be resolved
+    //this logic is danger, because Trace.start() Trace.end() pattern called over twice times, it will be not working as I think
     while (this.isTracing) {
-      // traceNodes = this.makeTraceNodes(this.details);
       const promiseWaits = this.details
         .filter((detail) => detail.type === "exit")
         .filter((returnValue) => returnValue instanceof Promise);
@@ -60,14 +59,12 @@ class Tracer {
         break;
       }
     }
-
-    console.log(this.details);
     //Make trace tree(hierarchical tree structure by call)
     const traceNodes: TraceNode[] = this.makeTraceNodes(this.details);
-    console.log("hi1");
+    //Remove last node. it's not a trace node, it's Trace.end() command.. :(
+    traceNodes.pop();
     //Update duration
     this.duration = dayjs().diff(this.startTime, "ms");
-    console.log("hi2");
     //Remove event listener according to the execution environment
     if (Environment.isNodeJS()) {
       //Nodejs use process event
@@ -76,12 +73,8 @@ class Tracer {
       //Browser use globalThis event
       globalThis.removeEventListener(TRACE_EVENT_NAME, this.boundOnTrace);
     }
-
-    // await Promise.allSettled(traceNodes.map((node) => node.returnValue));
     //Make display result(for formatting)
-    console.log("hi3");
     const detailResult = this.makeDetailResult(traceNodes);
-    console.log("hi4");
     //Save result in file
     const htmlRoot = Format.generateHtmlRoot(
       detailResult,
@@ -137,14 +130,21 @@ class Tracer {
     }
   }
 
+  //Make trace nodes(hierarchical tree structure by call)
   private makeTraceNodes(details: Detail[]): TraceNode[] {
-    const traceNodes: TraceNode[] = []; // 루트 노드들
-    const nodeMap = new Map<string, TraceNode>();
-
-    // 1단계: 모든 노드 생성
+    const traceNodes: TraceNode[] = [];
+    let nodeMap = new Map<number, TraceNode>();
+    const enterDetails = details.filter((d) => d.type === "enter");
+    //Extract entry index for each trace id
+    const enterIndexMap = new Map<number, number>();
+    for (let i = 0; i < enterDetails.length; i++) {
+      enterIndexMap.set(enterDetails[i].traceId, i);
+    }
+    //Create nodes(transform details to trace nodes)
     for (const detail of details) {
       if (detail.type === "enter") {
         const node: TraceNode = {
+          parent: null,
           errored: false,
           traceId: detail.traceId,
           name: detail.name,
@@ -169,24 +169,24 @@ class Tracer {
       }
     }
 
-    // 2단계: 부모-자식 관계 설정
+    //Reverse chained nodes order
+    nodeMap = this.reverseChainedNodes(details, nodeMap);
+
+    //Setup parent-child relation
     for (const node of nodeMap.values()) {
       if (!node.parentTraceId) {
-        // parentTraceId가 없으면 루트 노드
         traceNodes.push(node);
       } else {
-        // 부모가 있으면 부모의 children에 추가
         const parent = nodeMap.get(node.parentTraceId);
         if (parent) {
           parent.children.push(node);
+          node.parent = parent;
         } else {
-          traceNodes.push(node);
+          traceNodes.push(node); // dangling parent
         }
       }
     }
 
-    // Trace.end() 이벤트는 제외
-    traceNodes.pop();
     return traceNodes;
   }
 
@@ -216,6 +216,7 @@ class Tracer {
         //HTM: detail page
         html: htmlContent,
         depth: depth,
+        chainInfo: node.chainInfo,
       });
       //Recursive call for children
       if (node.children?.length > 0) {
@@ -223,6 +224,78 @@ class Tracer {
       }
     }
     return result;
+  }
+
+  private reverseChainedNodes(
+    nodeDetails: Detail[],
+    nodeMap: Map<number, TraceNode>
+  ) {
+    const reversedChains: number[][] = [];
+    const currentReversedChainTraceIds: number[] = [];
+    let accumulating = false;
+    nodeDetails.some((detail) => {
+      const { chained, type } = detail;
+      if (type === "exit") {
+        return false;
+      }
+      if (chained && !accumulating) {
+        //start
+        accumulating = true;
+      }
+      if (accumulating) {
+        //accumulate
+        currentReversedChainTraceIds.push(detail.traceId);
+      }
+      if (!chained && accumulating) {
+        //end
+        accumulating = false;
+        reversedChains.push(currentReversedChainTraceIds.slice());
+        currentReversedChainTraceIds.length = 0;
+      }
+    });
+
+    reversedChains.some((reversedChainTraceIds) => {
+      //Chain root parent trace id
+      const rootParentTraceId = nodeMap.get(
+        reversedChainTraceIds[0]
+      )?.parentTraceId;
+      const chainRootTraceId = nodeMap.get(
+        reversedChainTraceIds[reversedChainTraceIds.length - 1]
+      )!.traceId;
+      //Setup parent trace id and chain info
+      for (let i = 0; i < reversedChainTraceIds.length; i++) {
+        const traceId = reversedChainTraceIds[i];
+        const currentNode = nodeMap.get(traceId)!;
+        currentNode.parentTraceId = rootParentTraceId;
+        currentNode.chainInfo = {
+          startTraceId: chainRootTraceId,
+          index: reversedChainTraceIds.length - i,
+        };
+      }
+    });
+    //Create new node map, because, Map is ordered by insertion order
+    const newNodeMap = new Map<number, TraceNode>();
+    Array.from(nodeMap.values())
+      //Sort by trace id
+      .sort((a, b) => {
+        if (a.traceId && b.traceId) {
+          return a.traceId - b.traceId;
+        }
+        return 0;
+      })
+      //Sort by chain index(must be chain node, if same start trace id, sort by chain index)
+      .sort((a, b) => {
+        if (a.chainInfo && b.chainInfo) {
+          if (a.chainInfo.startTraceId === b.chainInfo.startTraceId) {
+            return a.chainInfo.index - b.chainInfo.index;
+          }
+        }
+        return 0;
+      })
+      .some((node) => {
+        newNodeMap.set(node.traceId, node);
+      });
+    return newNodeMap;
   }
 
   //Reset settings(Trace is single instance but, v8(nodejs,browser) use signle thread, there is no side effect)

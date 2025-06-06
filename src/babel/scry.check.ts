@@ -1,6 +1,7 @@
 import { Environment } from "../utils/enviroment.js";
-import * as babel from "@babel/core";
 import { DEVELOPMENT_MODE, TRACE_MARKER, TRACE_ZONE } from "./scry.constant.js";
+import { Extractor } from "../utils/extractor.js";
+import * as babel from "@babel/core";
 
 //Checkers for scry babel plugin
 class ScryChecker {
@@ -8,7 +9,13 @@ class ScryChecker {
   constructor(t: typeof babel.types) {
     this.t = t;
   }
+  static isESM(filePath: string): boolean {
+    const pkgJson = Extractor.extractNearestPackageJSON(filePath);
+    if (!pkgJson) return false;
+    return pkgJson?.type === "module";
+  }
 
+  //Check if the function is a ReactDOM call
   public isReactDOMCall(
     node: babel.types.CallExpression | babel.types.NewExpression
   ): boolean {
@@ -23,14 +30,12 @@ class ScryChecker {
       callee.property.name === "createRoot"
     );
   }
-
+  //Check if the function is a TraceZone initialization or zone.js code
   public isTraceZoneInitialization(node: babel.types.Node): boolean {
     if (!this.t.isCallExpression(node)) return false;
-
     const callee = node.callee;
     if (!this.t.isMemberExpression(callee)) return false;
-
-    // Zone.current.fork() 패턴 확인
+    //Check if the function is a Zone.current.fork() pattern
     if (
       this.t.isMemberExpression(callee.object) &&
       this.t.isIdentifier(callee.object.object) &&
@@ -40,7 +45,7 @@ class ScryChecker {
       this.t.isIdentifier(callee.property) &&
       callee.property.name === "fork"
     ) {
-      // TRACE_ZONE 초기화 코드인지 확인
+      //Check if the function is a TRACE_ZONE initialization code
       const args = node.arguments[0];
       if (
         this.t.isObjectExpression(args) &&

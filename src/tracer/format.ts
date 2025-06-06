@@ -143,7 +143,7 @@ class Format {
             .trace-list {
               display: flex;
               flex-direction: column;
-              gap: 0.5rem;
+              gap: 0.75rem;
               padding: 1rem;
             }
 
@@ -446,6 +446,63 @@ class Format {
             .trace-item.nested.hidden + .trace-item.nested.hidden {
               margin-top: -0.5rem;
             }
+
+            .chain-group {
+              background: var(--card-bg);
+              border: 1px solid var(--primary-color);
+              border-radius: 12px;
+              padding: 1rem 0.75rem 0.75rem;
+              margin-bottom: 0;
+              box-shadow: 0 0 15px var(--primary-glow);
+              position: relative;
+              z-index: 1;
+            }
+
+            /* Chained 라벨 추가 */
+            .chain-group::before {
+              content: 'Chained';
+              position: absolute;
+              top: -0.75rem;
+              left: 1rem;
+              background: linear-gradient(135deg, var(--primary-dark), var(--accent-color));
+              padding: 0.25rem 0.75rem;
+              border-radius: 6px;
+              font-size: 0.75rem;
+              font-weight: 500;
+              color: var(--text-primary);
+              letter-spacing: 0.5px;
+              text-transform: uppercase;
+              box-shadow: 
+                0 2px 4px rgba(0, 0, 0, 0.1),
+                0 0 10px var(--primary-glow);
+              border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .chain-group .trace-item {
+              background: rgba(255, 255, 255, 0.05);
+              position: relative;
+              z-index: 2;
+            }
+
+            .chain-group .trace-item.nested {
+              margin-left: calc(var(--depth, 0) * 20px);
+              background: rgba(255, 255, 255, 0.03);
+            }
+
+            /* 체인 그룹 내부 아이템 간격 조정 */
+            .chain-group .trace-item + .trace-item {
+              margin-top: 1.0rem;
+            }
+
+            /* 체인 그룹 내부 마지막 아이템 마진 제거 */
+            .chain-group .trace-item:last-child {
+              margin-bottom: 0;
+            }
+
+            .chain-group .trace-item:hover {
+              transform: translateX(4px);
+              background: rgba(255, 255, 255, 0.1);
+            }
           </style>
         </head>
         <body>
@@ -498,33 +555,7 @@ class Format {
             </div>
 
             <div class="trace-list">
-              ${items
-                .map((item, index) => {
-                  return `
-                  <div class="trace-item ${item.depth >= 0 ? "nested" : ""}" 
-                       data-level="${item.depth}"
-                       style="--depth: ${item.depth}">
-                    <div class="trace-controls">
-                      <button class="collapse-btn" onclick="collapseTrace(event, ${
-                        item.depth
-                      })">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" pointer-events="none">
-                          <path d="M19 9l-7 7-7-7" pointer-events="none"/>
-                        </svg>
-                      </button>
-                    </div>
-                    <div class="item-content" onclick="showModal(${index})">
-                      <div class="trace-icon">
-                        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                        </svg>
-                      </div>
-                      <span class="trace-name">${item.title}</span>
-                    </div>
-                  </div>
-                `;
-                })
-                .join("")}
+              ${this.generateTraceList(items)}
             </div>
           </div>
 
@@ -545,7 +576,6 @@ class Format {
             function showModal(index) {
               const modal = document.getElementById('modal');
               const modalContent = document.getElementById('modal-content');
-              
               modalContent.innerHTML = items[index].html;
               modal.classList.add('visible');
               hljs.highlightAll();
@@ -615,10 +645,112 @@ class Format {
     `;
   }
 
+  static generateTraceList(items: DisplayDetailResult[]): string {
+    if (!items || items.length === 0) return "";
+
+    // 트레이스 아이템 렌더링 함수
+    const renderTraceItem = (item: DisplayDetailResult, index: number) =>
+      '<div class="trace-item ' +
+      (item.depth > 0 ? "nested" : "") +
+      '" ' +
+      'data-level="' +
+      item.depth +
+      '" ' +
+      'style="--depth: ' +
+      item.depth +
+      '">' +
+      '<div class="trace-controls">' +
+      '<button class="collapse-btn" onclick="collapseTrace(event, ' +
+      item.depth +
+      ')">' +
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" pointer-events="none">' +
+      '<path d="M19 9l-7 7-7-7" pointer-events="none"/>' +
+      "</svg>" +
+      "</button>" +
+      "</div>" +
+      '<div class="item-content" onclick="showModal(' +
+      index +
+      ')">' +
+      '<div class="trace-icon">' +
+      '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">' +
+      '<path d="M13 10V3L4 14h7v7l9-11h-7z"/>' +
+      "</svg>" +
+      "</div>" +
+      '<span class="trace-name">' +
+      item.title +
+      "</span>" +
+      "</div>" +
+      "</div>";
+
+    const processItems = (
+      startIndex: number,
+      parentDepth: number
+    ): [string, number] => {
+      let html = "";
+      let i = startIndex;
+
+      while (i < items.length) {
+        const item = items[i];
+
+        // 현재 아이템이 없거나 부모 뎁스보다 얕은 경우 처리 중단
+        if (!item || item.depth <= parentDepth) {
+          break;
+        }
+
+        // 체인의 시작을 만났을 때
+        if (item.chainInfo?.startTraceId) {
+          const chainId = item.chainInfo.startTraceId;
+          html += '<div class="chain-group">';
+
+          // 현재 아이템 렌더링
+          html += renderTraceItem(item, i);
+          i++;
+
+          // 다음 아이템들 처리
+          while (i < items.length) {
+            const nextItem = items[i];
+            if (
+              !nextItem ||
+              nextItem.depth <= parentDepth ||
+              (nextItem.chainInfo?.startTraceId &&
+                nextItem.chainInfo.startTraceId !== chainId &&
+                nextItem.depth === item.depth)
+            ) {
+              break;
+            }
+
+            // 새로운 체인 그룹 시작
+            if (
+              nextItem.chainInfo?.startTraceId &&
+              nextItem.chainInfo.startTraceId !== chainId
+            ) {
+              const [subHtml, newIndex] = processItems(i, item.depth);
+              html += subHtml;
+              i = newIndex;
+            } else {
+              html += renderTraceItem(nextItem, i);
+              i++;
+            }
+          }
+
+          html += "</div>";
+        } else {
+          // 일반 아이템 렌더링
+          html += renderTraceItem(item, i);
+          i++;
+        }
+      }
+
+      return [html, i];
+    };
+
+    const [finalHtml] = processItems(0, -1); // startIndex를 0으로 변경
+    return finalHtml;
+  }
+
   //Generate execution detail html
   static generateHtmlContent(node: TraceNode): string {
     const callType = node.classCode ? "method" : "function";
-
     return `
       <div class="trace-info">
         <div class="detail-header">

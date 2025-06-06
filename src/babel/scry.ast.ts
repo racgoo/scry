@@ -1,5 +1,4 @@
 import * as babel from "@babel/core";
-// import { Zone } from "zone.js";
 
 import {
   ScryAstVariable,
@@ -17,43 +16,65 @@ class ScryAst {
     this.t = t;
   }
 
-  public createCodeExtractor(
-    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
-  ) {
-    const callee = path.node.callee;
-    if (this.t.isMemberExpression(callee)) {
-      return this.t.variableDeclaration("const", [
-        this.t.variableDeclarator(
-          this.t.identifier("code"),
-          this.t.callExpression(
-            this.t.memberExpression(
-              this.t.identifier("Extractor"),
-              this.t.identifier("extractCode")
-            ),
-            [
-              callee.object,
-              this.t.stringLiteral(
-                this.t.isIdentifier(callee.property) ? callee.property.name : ""
-              ),
-            ]
-          )
-        ),
-      ]);
-    } else {
-      return this.t.variableDeclaration("const", [
-        this.t.variableDeclarator(
-          this.t.identifier("code"),
-          this.t.callExpression(
-            this.t.memberExpression(
-              this.t.identifier("Extractor"),
-              this.t.identifier("extractFunction")
-            ),
-            [callee as babel.types.Identifier]
-          )
-        ),
-      ]);
-    }
+  public createCodeExtractor() {
+    return this.t.variableDeclaration("const", [
+      this.t.variableDeclarator(
+        this.t.identifier("code"),
+        this.t.objectExpression([
+          this.t.objectProperty(
+            this.t.identifier("classCode"),
+            this.t.stringLiteral("")
+          ),
+          this.t.objectProperty(
+            this.t.identifier("functionCode"),
+            this.t.stringLiteral("")
+          ),
+          this.t.objectProperty(
+            this.t.identifier("methodCode"),
+            this.t.stringLiteral("")
+          ),
+        ])
+      ),
+    ]);
   }
+
+  // public createCodeExtractor(
+  //   path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
+  // ) {
+  //   const callee = path.node.callee;
+  //   if (this.t.isMemberExpression(callee)) {
+  //     return this.t.variableDeclaration("const", [
+  //       this.t.variableDeclarator(
+  //         this.t.identifier("code"),
+  //         this.t.callExpression(
+  //           this.t.memberExpression(
+  //             this.t.identifier("Extractor"),
+  //             this.t.identifier("extractCode")
+  //           ),
+  //           [
+  //             callee.object,
+  //             this.t.stringLiteral(
+  //               this.t.isIdentifier(callee.property) ? callee.property.name : ""
+  //             ),
+  //           ]
+  //         )
+  //       ),
+  //     ]);
+  //   } else {
+  //     return this.t.variableDeclaration("const", [
+  //       this.t.variableDeclarator(
+  //         this.t.identifier("code"),
+  //         this.t.callExpression(
+  //           this.t.memberExpression(
+  //             this.t.identifier("Extractor"),
+  //             this.t.identifier("extractFunction")
+  //           ),
+  //           [callee as babel.types.Identifier]
+  //         )
+  //       ),
+  //     ]);
+  //   }
+  // }
 
   public createConsoleLog() {
     return this.t.expressionStatement(
@@ -81,20 +102,14 @@ class ScryAst {
     }
 
     // Promise executor나 setTimeout 콜백 등의 내부 함수인 경우
-    if (
-      currentFunction.isArrowFunctionExpression() ||
-      currentFunction.isFunctionExpression()
-    ) {
-      const parentTraceId =
-        path.scope.getAllBindings()[ScryAstVariable.traceId];
-      if (parentTraceId) {
-        return this.t.variableDeclaration("const", [
-          this.t.variableDeclarator(
-            this.t.identifier(ScryAstVariable.parentTraceId),
-            this.t.identifier(ScryAstVariable.traceId)
-          ),
-        ]);
-      }
+    const parentFunction = currentFunction.getFunctionParent();
+    if (parentFunction) {
+      return this.t.variableDeclaration("const", [
+        this.t.variableDeclarator(
+          this.t.identifier(ScryAstVariable.parentTraceId),
+          this.t.identifier(ScryAstVariable.traceId)
+        ),
+      ]);
     }
 
     if (currentFunction.isClassMethod()) {
@@ -634,30 +649,99 @@ class ScryAst {
     path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
   ) {
     const originalCall = path.node;
+    // const callee = originalCall.callee;
 
-    // Zone 관련 호출인지 확인
-    const isZoneCall = this.isZoneRelatedCall(originalCall);
+    // Promise 체이닝인 경우
+    // if (
+    //   this.t.isMemberExpression(callee) &&
+    //   this.t.isIdentifier(callee.property) &&
+    //   callee.property.name === "then"
+    // ) {
+    // const thenCallback = originalCall.arguments[0];
 
-    // Create try-catch block
+    // then 콜백이 실행되는 시점에 Zone을 생성하도록 수정
+    // const wrappedCallback = this.t.functionExpression(
+    //   null,
+    //   [],
+    //   this.t.blockStatement([
+    //     // 현재 Zone의 traceId를 parentTraceId로 사용
+    //     this.createTraceId(),
+    //     this.t.returnStatement(
+    //       this.t.callExpression(
+    //         this.t.memberExpression(
+    //           this.t.memberExpression(
+    //             this.t.identifier("Zone"),
+    //             this.t.identifier("current")
+    //           ),
+    //           this.t.identifier("fork")
+    //         ),
+    //         [
+    //           this.t.objectExpression([
+    //             this.t.objectProperty(
+    //               this.t.identifier("properties"),
+    //               this.t.objectExpression([
+    //                 this.t.objectProperty(
+    //                   this.t.identifier(ScryAstVariable.parentTraceId),
+    //                   this.t.identifier(ScryAstVariable.traceId)
+    //                 ),
+    //               ])
+    //             ),
+    //           ]),
+    //         ]
+    //       )
+    //     ),
+    //     this.t.returnStatement(
+    //       this.t.callExpression(
+    //         this.t.memberExpression(
+    //           this.t.identifier(TRACE_ZONE),
+    //           this.t.identifier("run")
+    //         ),
+    //         [
+    //           this.t.functionExpression(
+    //             null,
+    //             [],
+    //             this.t.blockStatement([this.t.returnStatement(originalCall)])
+    //           ),
+    //         ]
+    //       )
+    //     ),
+    //   ])
+    // );
+
+    //   return this.t.expressionStatement(
+    //     this.t.assignmentExpression(
+    //       "=",
+    //       this.t.identifier(ScryAstVariable.returnValue),
+    //       this.t.callExpression(
+    //         this.t.memberExpression(callee.object, this.t.identifier("then")),
+    //         [wrappedCallback]
+    //       )
+    //     )
+    //   );
+    // }
+
+    // 일반적인 경우 (start22 등)
     const resultAst = this.t.expressionStatement(
       this.t.assignmentExpression(
         "=",
         this.t.identifier(ScryAstVariable.returnValue),
-        isZoneCall
-          ? originalCall // Zone 관련 호출이면 직접 실행
-          : this.t.callExpression(
-              this.t.memberExpression(
-                this.t.identifier(TRACE_ZONE),
-                this.t.identifier("run")
-              ),
-              [this.t.arrowFunctionExpression([], originalCall)]
-            )
+        this.t.callExpression(
+          this.t.memberExpression(
+            this.t.identifier(TRACE_ZONE),
+            this.t.identifier("run")
+          ),
+          [
+            this.t.functionExpression(
+              null,
+              [],
+              this.t.blockStatement([this.t.returnStatement(originalCall)])
+            ),
+          ]
+        )
       )
     );
 
     const tryBlock = this.t.blockStatement([resultAst]);
-
-    // Create catch clause
     const catchClause = this.t.catchClause(
       this.t.identifier("error"),
       this.t.blockStatement([

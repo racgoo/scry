@@ -4,7 +4,7 @@ export const TRACE_EVENT_NAME = "scry:trace";
 export const ANONYMOUS_FUNCTION_NAME = "AnonymousFunction";
 export const UNKNOWN_LOCATION = "UnknownLocation";
 export const DEVELOPMENT_MODE = "development";
-export const TRACE_ZONE = "TraceZone";
+export const TRACE_ZONE = "_traceZone";
 
 export const ScryEventType = {
   enter: "enter",
