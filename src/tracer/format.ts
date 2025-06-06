@@ -143,22 +143,29 @@ class Format {
             .trace-list {
               display: flex;
               flex-direction: column;
-              gap: 0.5rem;
+              gap: 0.75rem;
               padding: 1rem;
             }
 
             .trace-item {
+              display: flex;
+              align-items: center;
+              padding: 0.75rem 1rem;
+              height: auto;
+              min-height: 3rem;
               background: var(--card-bg);
               border-radius: 8px;
-              padding: 0.75rem 1rem;
-              height: 3rem;
-              cursor: pointer;
               border: 1px solid var(--border-color);
-              transition: all 0.3s ease;
+              transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+              margin-left: calc(var(--depth, 0) * 20px);
+            }
+
+            .item-content {
               display: flex;
               align-items: center;
               gap: 0.75rem;
-              width: 100%;
+              flex: 1;
+              cursor: pointer;
             }
 
             .trace-item:hover {
@@ -381,6 +388,121 @@ class Format {
               color: var(--primary-light);
               flex-shrink: 0;
             }
+
+            .trace-controls {
+              min-width: 24px;
+              height: 24px;
+              display: flex;
+              align-items: center;
+              margin-right: 8px;
+              background: rgba(255, 255, 255, 0.1);
+              border-radius: 4px;
+              padding: 2px;
+            }
+
+            .collapse-btn {
+              width: 24px;
+              height: 24px;
+              background: none;
+              border: none;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: var(--text-primary);
+              padding: 0;
+              opacity: 0.7;
+              transition: all 0.2s ease;
+            }
+
+            .collapse-btn:hover {
+              opacity: 1;
+              transform: scale(1.1);
+            }
+
+            .collapse-btn svg {
+              width: 16px;
+              height: 16px;
+              transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+              transform: rotate(0);
+            }
+
+            .collapse-btn.collapsed svg {
+              transform: rotate(-90deg);
+            }
+
+            .trace-item.nested.hidden {
+              display: none !important;
+              height: 0 !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              opacity: 0;
+              pointer-events: none;
+              border: none;
+              overflow: hidden;
+            }
+
+            /* 추가: 연속된 hidden 아이템들 사이의 gap 제거 */
+            .trace-item.nested.hidden + .trace-item.nested.hidden {
+              margin-top: -0.5rem;
+            }
+
+            .chain-group {
+              background: var(--card-bg);
+              border: 1px solid var(--primary-color);
+              border-radius: 12px;
+              padding: 1rem 0.75rem 0.75rem;
+              margin-bottom: 0;
+              box-shadow: 0 0 15px var(--primary-glow);
+              position: relative;
+              z-index: 1;
+            }
+
+            /* Chained 라벨 추가 */
+            .chain-group::before {
+              content: 'Chained';
+              position: absolute;
+              top: -0.75rem;
+              left: 1rem;
+              background: linear-gradient(135deg, var(--primary-dark), var(--accent-color));
+              padding: 0.25rem 0.75rem;
+              border-radius: 6px;
+              font-size: 0.75rem;
+              font-weight: 500;
+              color: var(--text-primary);
+              letter-spacing: 0.5px;
+              text-transform: uppercase;
+              box-shadow: 
+                0 2px 4px rgba(0, 0, 0, 0.1),
+                0 0 10px var(--primary-glow);
+              border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .chain-group .trace-item {
+              background: rgba(255, 255, 255, 0.05);
+              position: relative;
+              z-index: 2;
+            }
+
+            .chain-group .trace-item.nested {
+              margin-left: calc(var(--depth, 0) * 20px);
+              background: rgba(255, 255, 255, 0.03);
+            }
+
+            /* 체인 그룹 내부 아이템 간격 조정 */
+            .chain-group .trace-item + .trace-item {
+              margin-top: 1.0rem;
+            }
+
+            /* 체인 그룹 내부 마지막 아이템 마진 제거 */
+            .chain-group .trace-item:last-child {
+              margin-bottom: 0;
+            }
+
+            .chain-group .trace-item:hover {
+              transform: translateX(4px);
+              background: rgba(255, 255, 255, 0.1);
+            }
           </style>
         </head>
         <body>
@@ -433,20 +555,7 @@ class Format {
             </div>
 
             <div class="trace-list">
-              ${items
-                .map(
-                  (item, index) => `
-                <div class="trace-item" onclick="showModal(${index})" style="--delay: ${index}">
-                  <div class="trace-icon">
-                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                    </svg>
-                  </div>
-                  <span class="trace-name">${item.title}</span>
-                </div>
-              `
-                )
-                .join("")}
+              ${this.generateTraceList(items)}
             </div>
           </div>
 
@@ -462,12 +571,11 @@ class Format {
           </div>
 
           <script>
-            const items = ${JSON.stringify(items)};
+            const items = ${this.parseJson(items)};
             
             function showModal(index) {
               const modal = document.getElementById('modal');
               const modalContent = document.getElementById('modal-content');
-              
               modalContent.innerHTML = items[index].html;
               modal.classList.add('visible');
               hljs.highlightAll();
@@ -486,16 +594,163 @@ class Format {
             });
 
             hljs.highlightAll();
+
+            function collapseTrace(event, level) {
+              event.preventDefault();
+              event.stopPropagation();
+              
+              const button = event.currentTarget;
+              const isCollapsing = !button.classList.contains('collapsed');
+              button.classList.toggle('collapsed');
+              
+              const currentItem = button.closest('.trace-item');
+              let next = currentItem.nextElementSibling;
+              
+              while (next) {
+                const nextLevel = parseInt(next.dataset.level);
+                if (nextLevel <= level) break;
+                
+                if (isCollapsing) {
+                  // 닫을 때: 현재 레벨보다 깊은 모든 항목을 숨김
+                  next.classList.add('hidden');
+                } else {
+                  // 열 때: 직계 자식만 보이게 하고, 나머지는 부모의 상태를 따라감
+                  if (nextLevel === level + 1) {
+                    next.classList.remove('hidden');
+                  } else {
+                    // 직계 자식이 아닌 경우, 모든 부모의 상태를 확인
+                    let parent = next.previousElementSibling;
+                    let shouldShow = true;
+                    
+                    while (parent && parseInt(parent.dataset.level) > level) {
+                      const parentButton = parent.querySelector('.collapse-btn');
+                      if (parentButton?.classList.contains('collapsed')) {
+                        shouldShow = false;
+                        break;
+                      }
+                      parent = parent.previousElementSibling;
+                    }
+                    
+                    if (shouldShow) {
+                      next.classList.remove('hidden');
+                    }
+                  }
+                }
+                next = next.nextElementSibling;
+              }
+            }
           </script>
         </body>
       </html>
     `;
   }
 
+  static generateTraceList(items: DisplayDetailResult[]): string {
+    if (!items || items.length === 0) return "";
+
+    // 트레이스 아이템 렌더링 함수
+    const renderTraceItem = (item: DisplayDetailResult, index: number) =>
+      '<div class="trace-item ' +
+      (item.depth > 0 ? "nested" : "") +
+      '" ' +
+      'data-level="' +
+      item.depth +
+      '" ' +
+      'style="--depth: ' +
+      item.depth +
+      '">' +
+      '<div class="trace-controls">' +
+      '<button class="collapse-btn" onclick="collapseTrace(event, ' +
+      item.depth +
+      ')">' +
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" pointer-events="none">' +
+      '<path d="M19 9l-7 7-7-7" pointer-events="none"/>' +
+      "</svg>" +
+      "</button>" +
+      "</div>" +
+      '<div class="item-content" onclick="showModal(' +
+      index +
+      ')">' +
+      '<div class="trace-icon">' +
+      '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">' +
+      '<path d="M13 10V3L4 14h7v7l9-11h-7z"/>' +
+      "</svg>" +
+      "</div>" +
+      '<span class="trace-name">' +
+      item.title +
+      "</span>" +
+      "</div>" +
+      "</div>";
+
+    const processItems = (
+      startIndex: number,
+      parentDepth: number
+    ): [string, number] => {
+      let html = "";
+      let i = startIndex;
+
+      while (i < items.length) {
+        const item = items[i];
+
+        // 현재 아이템이 없거나 부모 뎁스보다 얕은 경우 처리 중단
+        if (!item || item.depth <= parentDepth) {
+          break;
+        }
+
+        // 체인의 시작을 만났을 때
+        if (item.chainInfo?.startTraceId) {
+          const chainId = item.chainInfo.startTraceId;
+          html += '<div class="chain-group">';
+
+          // 현재 아이템 렌더링
+          html += renderTraceItem(item, i);
+          i++;
+
+          // 다음 아이템들 처리
+          while (i < items.length) {
+            const nextItem = items[i];
+            if (
+              !nextItem ||
+              nextItem.depth <= parentDepth ||
+              (nextItem.chainInfo?.startTraceId &&
+                nextItem.chainInfo.startTraceId !== chainId &&
+                nextItem.depth === item.depth)
+            ) {
+              break;
+            }
+
+            // 새로운 체인 그룹 시작
+            if (
+              nextItem.chainInfo?.startTraceId &&
+              nextItem.chainInfo.startTraceId !== chainId
+            ) {
+              const [subHtml, newIndex] = processItems(i, item.depth);
+              html += subHtml;
+              i = newIndex;
+            } else {
+              html += renderTraceItem(nextItem, i);
+              i++;
+            }
+          }
+
+          html += "</div>";
+        } else {
+          // 일반 아이템 렌더링
+          html += renderTraceItem(item, i);
+          i++;
+        }
+      }
+
+      return [html, i];
+    };
+
+    const [finalHtml] = processItems(0, -1); // startIndex를 0으로 변경
+    return finalHtml;
+  }
+
   //Generate execution detail html
   static generateHtmlContent(node: TraceNode): string {
     const callType = node.classCode ? "method" : "function";
-
     return `
       <div class="trace-info">
         <div class="detail-header">
@@ -540,7 +795,9 @@ class Format {
             </div>
             <div class="section-content">
               <pre><code class="language-javascript">${
-                node.originCode || "Source code not available"
+                node.classCode
+                  ? node.methodCode
+                  : node.functionCode || "Source code not available"
               }</code></pre>
             </div>
           </div>
@@ -569,16 +826,15 @@ class Format {
             <div class="section-header">
               <div class="section-title">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M22 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/>
+                  <circle cx="12" cy="10" r="3" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
                 Arguments
               </div>
             </div>
             <div class="section-content">
-              <pre><code class="language-json">${JSON.stringify(
-                node.args,
-                null,
-                2
+              <pre><code class="language-json">${this.parseJson(
+                node.args
               )}</code></pre>
             </div>
           </div>
@@ -622,8 +878,38 @@ class Format {
   private static parseReturnValue(returnValue: unknown): string {
     if (returnValue instanceof Error) {
       return returnValue.stack || returnValue.message;
+    } else if (returnValue instanceof Promise) {
+      return "[Promise]"; // Promise는 단순히 '[Promise]'로 표시
+    } else {
+      return JSON.stringify(returnValue, (key, value) => {
+        if (
+          value &&
+          typeof value === "object" &&
+          (value.constructor?.name?.includes("Zone") ||
+            key.includes("zone") ||
+            key.includes("Zone"))
+        ) {
+          return "[Zone Object]";
+        }
+        return value;
+      });
     }
-    return JSON.stringify(returnValue);
+  }
+
+  public static parseJson(value: unknown): string {
+    return JSON.stringify(value, (key, value) => {
+      // Zone 관련 객체인지 확인
+      if (
+        value &&
+        typeof value === "object" &&
+        (value.constructor?.name?.includes("Zone") ||
+          key.includes("zone") ||
+          key.includes("Zone"))
+      ) {
+        return "[Zone Object]";
+      }
+      return value;
+    });
   }
 }
 

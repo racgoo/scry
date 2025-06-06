@@ -3,43 +3,36 @@ import viteLogo from "/vite.svg";
 import "./App.css";
 import { Tracer } from "@racgoo/scry";
 
-class ClassTest {
-  public test() {
-    return 1;
+class ComplexTest {
+  constructor() {
+    console.log("ComplexTest constructor");
   }
-  public test2() {
-    return this.test();
+  public async start() {
+    console.log("Starting complex test");
+    const results = [
+      new Promise((resolve) => setTimeout(() => resolve(42), 500)),
+    ];
+    return results.reduce((a, b) => Number(a) + Number(b), 0);
   }
-}
-
-function foo1(x: number) {
-  foo2(x);
-  return x * 2;
-}
-
-function foo2(z: number) {
-  return z * 2;
-}
-
-function baz(test: { a: number }) {
-  return test.a;
-}
-
-function bar({ y }: { y: number }) {
-  foo1(foo2(2));
-  foo2(y + 3);
-  baz({ a: 1 });
 }
 
 function App() {
   function test() {
-    const classTest = new ClassTest();
-
     Tracer.start();
-
-    bar({ y: 5 });
-    classTest.test2();
-
+    const complexTest = new ComplexTest();
+    complexTest.start().then(() => {
+      console.log("Fist chain finsih");
+      complexTest.start().then(() => {
+        console.log("Second chain finsih");
+      });
+    });
+    [1, 2, 3]
+      .map((a) => {
+        return a * 2;
+      })
+      .filter((a) => {
+        return a > 2;
+      });
     Tracer.end();
   }
   return (

@@ -1,34 +1,21 @@
 import { Tracer } from "@racgoo/scry";
 
-class ClassTest {
-  test() {
-    return 1;
-  }
-  test2() {
-    for (let i = 0; i < 10; i++) {
-      this.test();
-    }
-    return 2;
-  }
+async function asyncTest2(flag) {
+  return new Promise((resolve) => setTimeout(() => resolve(flag), 1000));
 }
 
-const greeting = (name) => {
-  return "Hello, " + name + "!";
-};
+function asyncTest1(flag) {
+  console.log("asyncTest");
+  asyncTest2(flag + ":hi").then((res) => {
+    console.log(res);
+  });
+  return "hi";
+}
 
-const addExclamation = (text) => {
-  return text + "!!!";
-};
+function initTest() {
+  Tracer.start();
+  asyncTest1("1");
+  Tracer.end();
+}
 
-const processText = (text) => {
-  return text.toUpperCase();
-};
-
-const classTest = new ClassTest();
-
-Tracer.start();
-
-processText(addExclamation(greeting("World")));
-classTest.test2();
-
-Tracer.end();
+initTest();
