@@ -1,6 +1,10 @@
+import "zone.js";
 import { Output } from "../utils/output.js";
 import Format from "./format.js";
-import { TRACE_EVENT_NAME } from "../babel/scry.constant.js";
+import {
+  ACTIVE_TRACE_ID_SET,
+  TRACE_EVENT_NAME,
+} from "../babel/scry.constant.js";
 import { Environment } from "../utils/enviroment.js";
 import dayjs from "dayjs";
 
@@ -24,6 +28,9 @@ class Tracer {
       );
       return;
     }
+    //Init context history(for zone.js)
+    this.initContextHistory();
+    //Set tracing flag
     this.isTracing = true;
     //Init start time
     this.startTime = dayjs();
@@ -48,20 +55,14 @@ class Tracer {
       return;
     }
     //Wait for all return values to be resolved
-    //this logic is danger, because Trace.start() Trace.end() pattern called over twice times, it will be not working as I think
+    //this logic is wait for async context done(zone.js hasTask event driven)
     while (this.isTracing) {
-      const promiseWaits = this.details
-        .filter((detail) => detail.type === "exit")
-        .filter((returnValue) => returnValue instanceof Promise);
-      const results = await Promise.allSettled(promiseWaits);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      if (results.every((promise) => promise.status === "fulfilled")) {
-        break;
-      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      if (this.isAllContextDone()) break;
     }
     //Make trace tree(hierarchical tree structure by call)
     const traceNodes: TraceNode[] = this.makeTraceNodes(this.details);
-    //Remove last node. it's not a trace node, it's Trace.end() command.. :(
+    //Remove last node. it's not a trace node, it's Trace.end() command.. :( need refactor
     traceNodes.pop();
     //Update duration
     this.duration = dayjs().diff(this.startTime, "ms");
@@ -73,15 +74,15 @@ class Tracer {
       //Browser use globalThis event
       globalThis.removeEventListener(TRACE_EVENT_NAME, this.boundOnTrace);
     }
-    //Make display result(for formatting)
-    const detailResult = this.makeDetailResult(traceNodes);
-    //Save result in file
+
+    //Generate html root for Display UI(HTML)
     const htmlRoot = Format.generateHtmlRoot(
-      detailResult,
+      traceNodes,
       this.startTime,
       this.duration
     );
 
+    //Use display ui for Browser(Nodejs use file system)
     if (Environment.isNodeJS()) {
       import("fs").then(async (fs) => {
         //Create scry directory if not exists
@@ -101,7 +102,6 @@ class Tracer {
         Output.openBrowser(filePath);
       });
     }
-
     //Open tracing result window
     if (!Environment.isNodeJS()) {
       const blob = new Blob([htmlRoot], { type: "text/html" });
@@ -109,7 +109,6 @@ class Tracer {
       //Open result html with browser
       Output.openBrowser(url);
     }
-
     //Clear settings
     Output.print("Tracing is ended");
     this.isTracing = false;
@@ -118,6 +117,7 @@ class Tracer {
 
   //OnTrace function. called when trace event is emitted.
   private onTrace(event: unknown) {
+    // console.log("onTrace", (event as CustomEvent).detail!.traceId);
     // Nodejs use event directly, browser use custom event with detail
     const detail = Environment.isNodeJS()
       ? event
@@ -168,10 +168,8 @@ class Tracer {
         }
       }
     }
-
     //Reverse chained nodes order
     nodeMap = this.reverseChainedNodes(details, nodeMap);
-
     //Setup parent-child relation
     for (const node of nodeMap.values()) {
       if (!node.parentTraceId) {
@@ -182,50 +180,65 @@ class Tracer {
           parent.children.push(node);
           node.parent = parent;
         } else {
-          traceNodes.push(node); // dangling parent
+          traceNodes.push(node);
         }
       }
     }
-
     return traceNodes;
   }
 
-  //Make display result(for console)
-  private makeDetailResult(
-    traceNodes: TraceNode[],
-    depth = 0
-  ): DisplayDetailResult[] {
-    const result: DisplayDetailResult[] = [];
-    //Iterate traceNodes(they are root nodes)
-    for (const node of traceNodes) {
-      //Indent and prefix for display
-      // const indent = "ㅤㅤ".repeat(depth);
-      const indent = "ㅤ";
-      // const prefix = depth > 0 ? "⤷ " : "";
-      const prefix = "ㅤ";
-      //Generate html content
-      const htmlContent = Format.generateHtmlContent(node);
-      //Generate args string
-      const args = node.args.map((arg) => Format.parseJson(arg)).join(", ");
-      //Save to result
-      result.push({
-        //Title text
-        title: `${indent}${prefix}${node.name}(${args}) ${
-          node.errored ? "⚠️Error⚠️" : ""
-        } [${node.classCode ? "method" : "function"}]`,
-        //HTM: detail page
-        html: htmlContent,
-        depth: depth,
-        chainInfo: node.chainInfo,
-      });
-      //Recursive call for children
-      if (node.children?.length > 0) {
-        result.push(...this.makeDetailResult(node.children, depth + 1));
-      }
-    }
-    return result;
+  private isAllContextDone() {
+    const { [ACTIVE_TRACE_ID_SET]: activeTraceIdSet } =
+      Zone.root as unknown as {
+        [ACTIVE_TRACE_ID_SET]: Set<number>;
+      };
+    return activeTraceIdSet.size === 0;
   }
 
+  private initContextHistory() {
+    (Zone.root as unknown as { [ACTIVE_TRACE_ID_SET]: Set<number> })[
+      ACTIVE_TRACE_ID_SET
+    ] = new Set();
+  }
+  //Deprecated
+  //Make display result(for console)
+  // private makeDetailResult(
+  //   traceNodes: TraceNode[],
+  //   depth = 0
+  // ): DisplayDetailResult[] {
+  //   const result: DisplayDetailResult[] = [];
+  //   //Iterate traceNodes(they are root nodes)
+  //   for (const node of traceNodes) {
+  //     //Indent and prefix for display
+  //     // const indent = "ㅤㅤ".repeat(depth);
+  //     const indent = "ㅤ";
+  //     // const prefix = depth > 0 ? "⤷ " : "";
+  //     const prefix = "ㅤ";
+  //     //Generate html content
+  //     const htmlContent = Format.generateHtmlContent(node);
+  //     //Generate args string
+  //     const args = node.args.map((arg) => Format.parseJson(arg)).join(", ");
+  //     //Save to result
+  //     result.push({
+  //       //Title text
+  //       title: `${indent}${prefix}${node.name}(${args}) ${
+  //         node.errored ? "⚠️Error⚠️" : ""
+  //       } [${node.classCode ? "method" : "function"}]`,
+  //       //HTM: detail page
+  //       html: htmlContent,
+  //       depth: depth,
+  //       chainInfo: node.chainInfo,
+  //     });
+  //     //Recursive call for children
+  //     if (node.children?.length > 0) {
+  //       result.push(...this.makeDetailResult(node.children, depth + 1));
+  //     }
+  //   }
+  //   return result;
+  // }
+
+  //Reverse chained nodes order
+  //(because, babel plugin transform code with wrapping. so reverse order is needed)
   private reverseChainedNodes(
     nodeDetails: Detail[],
     nodeMap: Map<number, TraceNode>
@@ -253,7 +266,6 @@ class Tracer {
         currentReversedChainTraceIds.length = 0;
       }
     });
-
     reversedChains.some((reversedChainTraceIds) => {
       //Chain root parent trace id
       const rootParentTraceId = nodeMap.get(

@@ -7,7 +7,10 @@ import {
   ANONYMOUS_FUNCTION_NAME,
   UNKNOWN_LOCATION,
   TRACE_ZONE,
+  ACTIVE_TRACE_ID_SET,
+  // ACTIVE_TRACE_ID_SET,
 } from "./scry.constant.js";
+import ScryChecker from "./scry.check.js";
 
 //AST generators for scry babel plugin
 class ScryAst {
@@ -38,6 +41,195 @@ class ScryAst {
     ]);
   }
 
+  public preProcess(
+    path: babel.NodePath<
+      babel.types.FunctionDeclaration | babel.types.ClassDeclaration
+    >,
+    scryAst: ScryAst,
+    scryChecker: ScryChecker,
+    code: string
+  ) {
+    //Check development mode
+    const developmentMode = ScryChecker.isDevelopmentMode();
+    //Check if the function is a trace zone initialization
+    const traceZoneInitialization = scryChecker.isTraceZoneInitialization(
+      path.node
+    );
+    //All check is passed
+    if (!developmentMode || traceZoneInitialization) {
+      path.skip();
+      return;
+    }
+    scryAst.createOriginCodeComment(path, code);
+  }
+
+  public createOriginCodeComment(
+    path: babel.NodePath<
+      babel.types.FunctionDeclaration | babel.types.ClassDeclaration
+    >,
+    code: string
+  ) {
+    const originalSource = code.slice(path.node.start!, path.node.end!);
+    const commentNode = this.t.emptyStatement();
+    commentNode.leadingComments = [
+      {
+        type: "CommentBlock",
+        value: `\n__ORIGINAL__\n${originalSource}\n`,
+      },
+    ];
+    if (path.isClassDeclaration()) {
+      path.insertAfter(commentNode);
+    }
+    if (path.isFunctionDeclaration()) {
+      path.node.body.body.unshift(commentNode);
+    }
+  }
+
+  // Add Zone.root initialization code if not initialized(on Program level)
+  public createZoneRootInitialization(
+    path: babel.NodePath<babel.types.Program>
+  ) {
+    path.node.body.unshift(
+      this.t.addComment(
+        this.t.ifStatement(
+          this.t.unaryExpression(
+            "!",
+            this.t.memberExpression(
+              this.t.memberExpression(
+                this.t.identifier("Zone"),
+                this.t.identifier("root")
+              ),
+              this.t.stringLiteral(ACTIVE_TRACE_ID_SET),
+              true // computed: Zone.root["activeTraceIdSet"]
+            )
+          ),
+          this.t.blockStatement([
+            this.t.expressionStatement(
+              this.t.assignmentExpression(
+                "=",
+                this.t.memberExpression(
+                  this.t.memberExpression(
+                    this.t.identifier("Zone"),
+                    this.t.identifier("root")
+                  ),
+                  this.t.stringLiteral(ACTIVE_TRACE_ID_SET),
+                  true
+                ),
+                this.t.newExpression(this.t.identifier("Set"), [])
+              )
+            ),
+          ])
+        ),
+        "leading",
+        TRACE_MARKER
+      )
+    );
+  }
+
+  //Create initial trace zone(on Program level)
+  public createInitailTraceZone(path: babel.NodePath<babel.types.Program>) {
+    path.node.body.unshift(
+      this.t.addComment(
+        this.t.variableDeclaration("const", [
+          this.t.variableDeclarator(
+            this.t.identifier(TRACE_ZONE),
+            this.t.callExpression(
+              this.t.memberExpression(
+                this.t.memberExpression(
+                  this.t.identifier("Zone"),
+                  this.t.identifier("current")
+                ),
+                this.t.identifier("fork")
+              ),
+              [
+                this.t.objectExpression([
+                  this.t.objectProperty(
+                    this.t.identifier("name"),
+                    this.t.stringLiteral(TRACE_ZONE)
+                  ),
+                  this.t.objectProperty(
+                    this.t.identifier("properties"),
+                    this.t.objectExpression([
+                      this.t.objectProperty(
+                        this.t.identifier(ScryAstVariable.parentTraceId),
+                        this.t.nullLiteral()
+                      ),
+                    ])
+                  ),
+                ]),
+              ]
+            )
+          ),
+        ]),
+        "leading",
+        TRACE_MARKER
+      )
+    );
+  }
+
+  //Add Zone.js import or require statement(on Program level)
+  public createDeclareZoneJS(
+    path: babel.NodePath<babel.types.Program>,
+    esm: boolean
+  ) {
+    if (esm) {
+      //For esm target
+      path.node.body.unshift(
+        this.t.importDeclaration([], this.t.stringLiteral("zone.js"))
+      );
+    } else {
+      //For commonjs target
+      path.node.body.unshift(
+        this.t.expressionStatement(
+          this.t.callExpression(this.t.identifier("require"), [
+            this.t.stringLiteral("zone.js/mix"),
+          ])
+        )
+      );
+    }
+  }
+
+  //Add Extractor import or require statement from @racgoo/scry(on Program level)
+  public createDeclareExtractor(
+    path: babel.NodePath<babel.types.Program>,
+    esm: boolean
+  ) {
+    if (esm) {
+      //For esm target
+      path.node.body.unshift(
+        this.t.importDeclaration(
+          [
+            this.t.importSpecifier(
+              this.t.identifier("Extractor"),
+              this.t.identifier("Extractor")
+            ),
+          ],
+          this.t.stringLiteral("@racgoo/scry")
+        )
+      );
+    } else {
+      //For commonjs target
+      path.node.body.unshift(
+        this.t.variableDeclaration("const", [
+          this.t.variableDeclarator(
+            this.t.objectPattern([
+              this.t.objectProperty(
+                this.t.identifier("Extractor"),
+                this.t.identifier("Extractor"),
+                false,
+                true
+              ),
+            ]),
+            this.t.callExpression(this.t.identifier("require"), [
+              this.t.stringLiteral("@racgoo/scry"),
+            ])
+          ),
+        ])
+      );
+    }
+  }
+
+  //For next feature
   // public createCodeExtractor(
   //   path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
   // ) {
@@ -76,408 +268,36 @@ class ScryAst {
   //   }
   // }
 
-  public createConsoleLog() {
+  //For debug(only dev)
+  public createConsoleLog(identifier: string, flag: string) {
     return this.t.expressionStatement(
       this.t.callExpression(
         this.t.memberExpression(
           this.t.identifier("console"),
           this.t.identifier("log")
         ),
-        [this.t.identifier("code")]
+        [this.t.stringLiteral(flag), this.t.identifier(identifier)]
       )
     );
   }
 
-  public createParentTraceIdExtractor(
-    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
-  ) {
-    const currentFunction = path.getFunctionParent();
-    if (!currentFunction) {
-      return this.t.variableDeclaration("const", [
-        this.t.variableDeclarator(
-          this.t.identifier(ScryAstVariable.parentTraceId),
-          this.t.nullLiteral()
-        ),
-      ]);
-    }
-
-    // Promise executor나 setTimeout 콜백 등의 내부 함수인 경우
-    const parentFunction = currentFunction.getFunctionParent();
-    if (parentFunction) {
-      return this.t.variableDeclaration("const", [
-        this.t.variableDeclarator(
-          this.t.identifier(ScryAstVariable.parentTraceId),
-          this.t.identifier(ScryAstVariable.traceId)
-        ),
-      ]);
-    }
-
-    if (currentFunction.isClassMethod()) {
-      const methodNode = currentFunction.node;
-      if (this.t.isIdentifier(methodNode.key)) {
-        if (methodNode.kind === "constructor") {
-          // 생성자 메서드인 경우: ClassName.prototype.parentTraceId
-          const classPath = path.findParent((p) => p.isClassDeclaration());
-          const className =
-            (classPath?.node as babel.types.ClassDeclaration | undefined)?.id
-              ?.name || ANONYMOUS_FUNCTION_NAME;
-
-          return this.t.variableDeclaration("const", [
-            this.t.variableDeclarator(
-              this.t.identifier(ScryAstVariable.parentTraceId),
-              this.t.memberExpression(
-                this.t.memberExpression(
-                  this.t.identifier(className),
-                  this.t.identifier("prototype")
-                ),
-                this.t.identifier(ScryAstVariable.parentTraceId)
-              )
-            ),
-          ]);
-        } else {
-          // 일반 클래스 메서드인 경우: this.methodName.parentTraceId
-          return this.t.variableDeclaration("const", [
-            this.t.variableDeclarator(
-              this.t.identifier(ScryAstVariable.parentTraceId),
-              this.t.memberExpression(
-                this.t.memberExpression(
-                  this.t.thisExpression(),
-                  this.t.identifier(methodNode.key.name)
-                ),
-                this.t.identifier(ScryAstVariable.parentTraceId)
-              )
-            ),
-          ]);
-        }
-      }
-    } else if (
-      currentFunction.isFunctionDeclaration() &&
-      currentFunction.node.id
-    ) {
-      // 일반 함수인 경우: functionName.parentTraceId
-      return this.t.variableDeclaration("const", [
-        this.t.variableDeclarator(
-          this.t.identifier(ScryAstVariable.parentTraceId),
+  //Add trace id to active trace id set(Zone root)
+  public createActiveTraceIdAdder() {
+    return this.t.expressionStatement(
+      this.t.callExpression(
+        this.t.memberExpression(
           this.t.memberExpression(
-            this.t.identifier(currentFunction.node.id.name),
-            this.t.identifier(ScryAstVariable.parentTraceId)
-          )
-        ),
-      ]);
-    }
-
-    return this.t.variableDeclaration("const", [
-      this.t.variableDeclarator(
-        this.t.identifier(ScryAstVariable.parentTraceId),
-        this.t.nullLiteral()
-      ),
-    ]);
-  }
-
-  public createParentTraceIdInjector(
-    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
-  ) {
-    const originalCall = path.node;
-    const callee = originalCall.callee;
-
-    if (path.isNewExpression()) {
-      if (!this.t.isIdentifier(callee)) {
-        return this.t.blockStatement([]);
-      }
-      // Promise 생성자인 경우 특별 처리
-      if (callee.name === "Promise") {
-        const [executor] = originalCall.arguments;
-        if (
-          this.t.isArrowFunctionExpression(executor) ||
-          this.t.isFunctionExpression(executor)
-        ) {
-          return this.t.blockStatement([
-            this.t.expressionStatement(
-              this.t.assignmentExpression(
-                "=",
-                this.t.memberExpression(
-                  this.t.memberExpression(
-                    this.t.identifier(callee.name),
-                    this.t.identifier("prototype")
-                  ),
-                  this.t.identifier(ScryAstVariable.parentTraceId)
-                ),
-                this.t.identifier(ScryAstVariable.traceId)
-              )
-            ),
-          ]);
-        }
-      }
-      // 일반 생성자 처리
-      return this.t.blockStatement([
-        this.t.expressionStatement(
-          this.t.assignmentExpression(
-            "=",
             this.t.memberExpression(
-              this.t.memberExpression(
-                this.t.identifier(callee.name),
-                this.t.identifier("prototype")
-              ),
-              this.t.identifier(ScryAstVariable.parentTraceId)
+              this.t.identifier("Zone"),
+              this.t.identifier("root")
             ),
-            this.t.identifier(ScryAstVariable.traceId)
-          )
+            this.t.identifier(ACTIVE_TRACE_ID_SET)
+          ),
+          this.t.identifier("add")
         ),
-      ]);
-    }
-    // ReactDOM.createRoot 등 특수 케이스 처리
-    if (this.t.isMemberExpression(callee)) {
-      const memberCallee = callee as babel.types.MemberExpression;
-      if (
-        this.t.isIdentifier(memberCallee.object) &&
-        this.t.isIdentifier(memberCallee.property) &&
-        ((memberCallee.object.name === "ReactDOM" &&
-          memberCallee.property.name === "createRoot") ||
-          (memberCallee.object.name === "ReactDOMClient" &&
-            memberCallee.property.name === "createRoot"))
-      ) {
-        return this.t.expressionStatement(this.t.nullLiteral());
-      }
-    }
-
-    if (this.t.isMemberExpression(callee)) {
-      // 기존 메서드 호출 처리 코드 유지
-      if (
-        this.t.isThisExpression(callee.object) &&
-        this.t.isIdentifier(callee.property)
-      ) {
-        return this.t.blockStatement([
-          this.t.expressionStatement(
-            this.t.assignmentExpression(
-              "=",
-              this.t.memberExpression(
-                this.t.memberExpression(
-                  this.t.thisExpression(),
-                  this.t.identifier(callee.property.name)
-                ),
-                this.t.identifier(ScryAstVariable.parentTraceId)
-              ),
-              this.t.identifier(ScryAstVariable.traceId)
-            )
-          ),
-        ]);
-      } else if (
-        this.t.isIdentifier(callee.object) &&
-        this.t.isIdentifier(callee.property)
-      ) {
-        return this.t.blockStatement([
-          this.t.expressionStatement(
-            this.t.assignmentExpression(
-              "=",
-              this.t.memberExpression(
-                this.t.memberExpression(
-                  this.t.identifier(callee.object.name),
-                  this.t.identifier(callee.property.name)
-                ),
-                this.t.identifier(ScryAstVariable.parentTraceId)
-              ),
-              this.t.identifier(ScryAstVariable.traceId)
-            )
-          ),
-        ]);
-      }
-    } else if (this.t.isIdentifier(callee)) {
-      // 일반 함수 호출에 대한 처리 추가
-      return this.t.blockStatement([
-        this.t.expressionStatement(
-          this.t.assignmentExpression(
-            "=",
-            this.t.memberExpression(
-              this.t.identifier(callee.name),
-              this.t.identifier(ScryAstVariable.parentTraceId)
-            ),
-            this.t.identifier(ScryAstVariable.traceId)
-          )
-        ),
-      ]);
-    }
-
-    return this.t.blockStatement([]);
-  }
-
-  // public createParentTraceIdUpdater(
-  //   path: babel.NodePath<babel.types.CallExpression>
-  // ) {
-  //   const originalCall = path.node;
-  //   return this.t.expressionStatement(
-  //     this.t.assignmentExpression(
-  //       "=",
-  //       this.t.memberExpression(
-  //         this.t.memberExpression(
-  //           this.t.identifier("Function"),
-  //           this.t.identifier("prototype")
-  //         ),
-  //         this.t.identifier("parentTraceId")
-  //       ),
-  //       this.t.nullLiteral()
-  //     )
-  //   );
-  // }
-
-  public createParentTraceIdResolver() {
-    const getParentTraceIdExpression = this.t.callExpression(
-      this.t.arrowFunctionExpression(
-        [],
-        this.t.blockStatement([
-          this.t.variableDeclaration("let", [
-            this.t.variableDeclarator(
-              this.t.identifier(ScryAstVariable.parentTraceId),
-              null
-            ),
-          ]),
-          this.t.tryStatement(
-            this.t.blockStatement([
-              this.t.expressionStatement(
-                this.t.assignmentExpression(
-                  "=",
-                  this.t.identifier(ScryAstVariable.parentTraceId),
-                  this.t.identifier(ScryAstVariable.traceId)
-                )
-              ),
-            ]),
-            this.t.catchClause(
-              this.t.identifier("error"),
-              this.t.blockStatement([
-                this.t.expressionStatement(
-                  this.t.assignmentExpression(
-                    "=",
-                    this.t.identifier(ScryAstVariable.parentTraceId),
-                    this.t.nullLiteral()
-                  )
-                ),
-              ])
-            )
-          ),
-          this.t.returnStatement(
-            this.t.identifier(ScryAstVariable.parentTraceId)
-          ),
-        ])
-      ),
-      []
+        [this.t.identifier(ScryAstVariable.traceId)]
+      )
     );
-    return getParentTraceIdExpression;
-  }
-
-  //Get origin code unique key with path(Current not used. but it's for future use. need archive origin code map)
-  public getOriginCodeKey(path: babel.NodePath<babel.types.CallExpression>) {
-    const callee = path.node.callee;
-    const loc = path.node.loc;
-    //Function Call
-    if (this.t.isIdentifier(callee)) {
-      return `${callee.name}:${loc?.filename}:${loc?.start.line}:${loc?.start.column}`;
-    }
-    //Method Call
-    if (
-      this.t.isMemberExpression(callee) &&
-      this.t.isIdentifier(callee.property)
-    ) {
-      const objectName = this.getObjectName(callee.object);
-      return `${objectName}.${callee.property.name}:${loc?.filename}:${loc?.start.line}:${loc?.start.column}`;
-    }
-    //Etc ..
-    return "";
-  }
-
-  //Get origin code from path
-  public getOriginCode(
-    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
-  ): {
-    classCode: string;
-    originCode: string;
-  } {
-    const callee = path.node.callee;
-    let classCode = "";
-    let originCode = "";
-
-    if (this.t.isMemberExpression(callee)) {
-      let classPath: babel.NodePath | null = null;
-      let className: string | undefined;
-
-      // this.method() 케이스
-      if (this.t.isThisExpression(callee.object)) {
-        classPath = path.findParent((p) => p.isClassDeclaration());
-        if (classPath?.isClassDeclaration() && classPath.node.id) {
-          className = classPath.node.id.name;
-        }
-      }
-      // instance.method() 케이스
-      else if (this.t.isIdentifier(callee.object)) {
-        const binding = path.scope.getBinding(callee.object.name);
-        if (binding?.path.node.type === "VariableDeclarator") {
-          const init = (binding.path.node as babel.types.VariableDeclarator)
-            .init;
-          if (
-            this.t.isNewExpression(init) &&
-            this.t.isIdentifier(init.callee)
-          ) {
-            // 클래스 이름을 찾음
-            className = init.callee.name;
-            // 클래스 정의를 찾기 위해 바인딩을 추적
-            const classBinding = binding.scope.getBinding(className);
-            if (classBinding) {
-              // ImportDeclaration인 경우 해당 모듈에서 클래스를 찾아야 함
-              if (
-                classBinding.path.isImportSpecifier() ||
-                classBinding.path.isImportDefaultSpecifier()
-              ) {
-                const importDecl = classBinding.path.parentPath;
-                if (importDecl.isImportDeclaration()) {
-                  const sourcePath = importDecl.node.source.value;
-                  // 여기서 sourcePath를 사용하여 실제 클래스 정의 파일을 찾아야 함
-                  // 이 부분은 babel plugin의 file resolver를 사용해야 할 것 같습니다
-                  console.log("Need to resolve:", sourcePath);
-                }
-              } else if (classBinding.path.isClassDeclaration()) {
-                classPath = classBinding.path;
-              }
-            }
-          }
-        }
-      }
-
-      if (className && classPath?.isClassDeclaration()) {
-        const node = classPath.node;
-        if (node.loc) {
-          classCode = this.extractCodeFromLoc(
-            classPath.hub.getCode() || "",
-            node.loc
-          );
-
-          // 메서드 코드 추출
-          if (this.t.isIdentifier(callee.property)) {
-            const method = node.body.body.find(
-              (m: babel.types.Node): m is babel.types.ClassMethod =>
-                this.t.isClassMethod(m) &&
-                this.t.isIdentifier(m.key) &&
-                this.t.isIdentifier(callee.property) &&
-                m.key.name === callee.property.name
-            );
-
-            if (method?.loc) {
-              originCode = this.extractCodeFromLoc(
-                classPath.hub.getCode() || "",
-                method.loc
-              );
-            }
-          }
-        }
-      }
-    }
-
-    return { classCode, originCode };
-  }
-
-  //Extract code from location
-  private extractCodeFromLoc(code: string, loc: babel.types.SourceLocation) {
-    const lines = code.split("\n");
-    const start = loc.start.line - 1;
-    const end = loc.end.line - 1;
-    return lines.slice(start, end + 1).join("\n");
   }
 
   //Create ast marker variable
@@ -528,21 +348,7 @@ class ScryAst {
     ]);
   }
 
-  //Set ast currentTraceId to globalThis
-  public createCurrentTraceIdSetterAsGlobalCurrentTraceId() {
-    return this.t.expressionStatement(
-      this.t.assignmentExpression(
-        "=",
-        this.t.memberExpression(
-          this.t.identifier(ScryAstVariable.globalThis),
-          this.t.identifier(ScryAstVariable.globalCurrentTraceId)
-        ),
-        this.t.identifier(ScryAstVariable.traceId)
-      )
-    );
-  }
-
-  //Set ast currentTraceId to globalThis
+  //Get parent trace id from current zone(with zone.js scope)
   public craeteGlobalParentTraceIdSetterWithTraceId() {
     return this.t.variableDeclaration("const", [
       this.t.variableDeclarator(
@@ -558,6 +364,10 @@ class ScryAst {
           [
             this.t.objectExpression([
               this.t.objectProperty(
+                this.t.identifier("name"),
+                this.t.stringLiteral(TRACE_ZONE)
+              ),
+              this.t.objectProperty(
                 this.t.identifier("properties"),
                 this.t.objectExpression([
                   this.t.objectProperty(
@@ -566,6 +376,169 @@ class ScryAst {
                   ),
                 ])
               ),
+              this.t.objectProperty(
+                this.t.identifier("onInvoke"),
+                this.t.functionExpression(
+                  null,
+                  [
+                    this.t.identifier("parentZoneDelegate"),
+                    this.t.identifier("currentZone"),
+                    this.t.identifier("targetZone"),
+                    this.t.identifier("delegate"),
+                    this.t.identifier("applyThis"),
+                    this.t.identifier("args"),
+                    this.t.identifier("source"),
+                  ],
+                  this.t.blockStatement([
+                    this.t.expressionStatement(
+                      this.t.callExpression(
+                        this.t.memberExpression(
+                          this.t.memberExpression(
+                            this.t.memberExpression(
+                              this.t.identifier("Zone"),
+                              this.t.identifier("root")
+                            ),
+                            this.t.stringLiteral(ACTIVE_TRACE_ID_SET),
+                            true
+                          ),
+                          this.t.identifier("add")
+                        ),
+                        [this.t.identifier(ScryAstVariable.traceId)]
+                      )
+                    ),
+                    this.t.expressionStatement(
+                      this.t.callExpression(
+                        this.t.identifier("queueMicrotask"),
+                        [
+                          this.t.functionExpression(
+                            null,
+                            [],
+                            this.t.blockStatement([
+                              this.t.expressionStatement(
+                                this.t.stringLiteral(
+                                  "this is only onHasTaskQueue Trigger"
+                                )
+                              ),
+                            ])
+                          ),
+                        ]
+                      )
+                    ),
+                    this.t.returnStatement(
+                      this.t.callExpression(
+                        this.t.memberExpression(
+                          this.t.identifier("parentZoneDelegate"),
+                          this.t.identifier("invoke")
+                        ),
+                        [
+                          this.t.identifier("targetZone"),
+                          this.t.identifier("delegate"),
+                          this.t.identifier("applyThis"),
+                          this.t.identifier("args"),
+                          this.t.identifier("source"),
+                        ]
+                      )
+                    ),
+                  ])
+                )
+              ),
+              this.t.objectProperty(
+                this.t.identifier("onHasTask"),
+                this.t.functionExpression(
+                  null,
+                  [
+                    this.t.identifier("delegate"),
+                    this.t.identifier("current"),
+                    this.t.identifier("target"),
+                    this.t.identifier("hasTaskState"),
+                  ],
+                  this.t.blockStatement([
+                    this.t.expressionStatement(
+                      this.t.callExpression(
+                        this.t.memberExpression(
+                          this.t.identifier("delegate"),
+                          this.t.identifier("hasTask")
+                        ),
+                        [
+                          this.t.identifier("target"),
+                          this.t.identifier("hasTaskState"),
+                        ]
+                      )
+                    ),
+                    this.t.variableDeclaration("const", [
+                      this.t.variableDeclarator(
+                        this.t.identifier("allDone"),
+                        this.t.logicalExpression(
+                          "&&",
+                          this.t.unaryExpression(
+                            "!",
+                            this.t.memberExpression(
+                              this.t.identifier("hasTaskState"),
+                              this.t.identifier("microTask")
+                            )
+                          ),
+                          this.t.logicalExpression(
+                            "&&",
+                            this.t.unaryExpression(
+                              "!",
+                              this.t.memberExpression(
+                                this.t.identifier("hasTaskState"),
+                                this.t.identifier("macroTask")
+                              )
+                            ),
+                            this.t.unaryExpression(
+                              "!",
+                              this.t.memberExpression(
+                                this.t.identifier("hasTaskState"),
+                                this.t.identifier("eventTask")
+                              )
+                            )
+                          )
+                        )
+                      ),
+                    ]),
+                    this.t.ifStatement(
+                      this.t.identifier("allDone"),
+                      this.t.blockStatement([
+                        this.t.ifStatement(
+                          this.t.callExpression(
+                            this.t.memberExpression(
+                              this.t.memberExpression(
+                                this.t.memberExpression(
+                                  this.t.identifier("Zone"),
+                                  this.t.identifier("root")
+                                ),
+                                this.t.stringLiteral(ACTIVE_TRACE_ID_SET),
+                                true
+                              ),
+                              this.t.identifier("has")
+                            ),
+                            [this.t.identifier(ScryAstVariable.traceId)]
+                          ),
+                          this.t.blockStatement([
+                            this.t.expressionStatement(
+                              this.t.callExpression(
+                                this.t.memberExpression(
+                                  this.t.memberExpression(
+                                    this.t.memberExpression(
+                                      this.t.identifier("Zone"),
+                                      this.t.identifier("root")
+                                    ),
+                                    this.t.stringLiteral(ACTIVE_TRACE_ID_SET),
+                                    true
+                                  ),
+                                  this.t.identifier("delete")
+                                ),
+                                [this.t.identifier(ScryAstVariable.traceId)]
+                              )
+                            ),
+                          ])
+                        ),
+                      ])
+                    ),
+                  ])
+                )
+              ),
             ]),
           ]
         )
@@ -573,49 +546,7 @@ class ScryAst {
     ]);
   }
 
-  //Set ast currentTraceId to globalThis
-  public craeteGlobalParentTraceIdSetterWithParentTraceId() {
-    return this.t.expressionStatement(
-      this.t.assignmentExpression(
-        "=",
-        this.t.memberExpression(
-          this.t.identifier(ScryAstVariable.globalThis),
-          this.t.identifier(ScryAstVariable.globalParentTraceId)
-        ),
-        this.t.identifier(ScryAstVariable.traceId)
-      )
-    );
-  }
-
-  //Set ast currentTraceId to globalThis
-  public craeteCurrentTraceIdSetterAsGlobalParentTraceId() {
-    return this.t.expressionStatement(
-      this.t.assignmentExpression(
-        "=",
-        this.t.memberExpression(
-          this.t.identifier(ScryAstVariable.globalThis),
-          this.t.identifier(ScryAstVariable.globalCurrentTraceId)
-        ),
-        this.t.identifier(ScryAstVariable.traceId)
-      )
-    );
-  }
-
-  //Set ast parentTraceId to globalThis
-  public createParentTraceIdSetterAsGlobalParentTraceId() {
-    return this.t.expressionStatement(
-      this.t.assignmentExpression(
-        "=",
-        this.t.memberExpression(
-          this.t.identifier(ScryAstVariable.globalThis),
-          this.t.identifier(ScryAstVariable.globalParentTraceId)
-        ),
-        this.t.identifier("parentTraceId")
-      )
-    );
-  }
-
-  //Get ast parentTraceId variable from globalThis
+  //Get ast parentTraceId variable from current zone(with zone.js scope)
   public createParentTraceIdFromGlobalParentTraceId() {
     return this.t.variableDeclaration("const", [
       this.t.variableDeclarator(
@@ -634,7 +565,7 @@ class ScryAst {
     ]);
   }
 
-  //Create ast returnValue
+  //Create ast returnValue(Just binding returnValue variable)
   public createReturnValue() {
     return this.t.variableDeclaration("let", [
       this.t.variableDeclarator(
@@ -644,83 +575,13 @@ class ScryAst {
     ]);
   }
 
-  //Update returnValue with origin execution
+  //Update returnValue with origin execution(with zone.js new forked scope)
   public craeteReturnValueUpdaterWithOriginExecution(
     path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
   ) {
+    //Get original call expression
     const originalCall = path.node;
-    // const callee = originalCall.callee;
-
-    // Promise 체이닝인 경우
-    // if (
-    //   this.t.isMemberExpression(callee) &&
-    //   this.t.isIdentifier(callee.property) &&
-    //   callee.property.name === "then"
-    // ) {
-    // const thenCallback = originalCall.arguments[0];
-
-    // then 콜백이 실행되는 시점에 Zone을 생성하도록 수정
-    // const wrappedCallback = this.t.functionExpression(
-    //   null,
-    //   [],
-    //   this.t.blockStatement([
-    //     // 현재 Zone의 traceId를 parentTraceId로 사용
-    //     this.createTraceId(),
-    //     this.t.returnStatement(
-    //       this.t.callExpression(
-    //         this.t.memberExpression(
-    //           this.t.memberExpression(
-    //             this.t.identifier("Zone"),
-    //             this.t.identifier("current")
-    //           ),
-    //           this.t.identifier("fork")
-    //         ),
-    //         [
-    //           this.t.objectExpression([
-    //             this.t.objectProperty(
-    //               this.t.identifier("properties"),
-    //               this.t.objectExpression([
-    //                 this.t.objectProperty(
-    //                   this.t.identifier(ScryAstVariable.parentTraceId),
-    //                   this.t.identifier(ScryAstVariable.traceId)
-    //                 ),
-    //               ])
-    //             ),
-    //           ]),
-    //         ]
-    //       )
-    //     ),
-    //     this.t.returnStatement(
-    //       this.t.callExpression(
-    //         this.t.memberExpression(
-    //           this.t.identifier(TRACE_ZONE),
-    //           this.t.identifier("run")
-    //         ),
-    //         [
-    //           this.t.functionExpression(
-    //             null,
-    //             [],
-    //             this.t.blockStatement([this.t.returnStatement(originalCall)])
-    //           ),
-    //         ]
-    //       )
-    //     ),
-    //   ])
-    // );
-
-    //   return this.t.expressionStatement(
-    //     this.t.assignmentExpression(
-    //       "=",
-    //       this.t.identifier(ScryAstVariable.returnValue),
-    //       this.t.callExpression(
-    //         this.t.memberExpression(callee.object, this.t.identifier("then")),
-    //         [wrappedCallback]
-    //       )
-    //     )
-    //   );
-    // }
-
-    // 일반적인 경우 (start22 등)
+    //Create ast returnValue with origin execution
     const resultAst = this.t.expressionStatement(
       this.t.assignmentExpression(
         "=",
@@ -740,8 +601,9 @@ class ScryAst {
         )
       )
     );
-
+    //Create try block
     const tryBlock = this.t.blockStatement([resultAst]);
+    //Create catch clause
     const catchClause = this.t.catchClause(
       this.t.identifier("error"),
       this.t.blockStatement([
@@ -754,60 +616,7 @@ class ScryAst {
         ),
       ])
     );
-
     return this.t.tryStatement(tryBlock, catchClause);
-  }
-
-  // Zone 관련 호출인지 확인하는 헬퍼 메서드 추가
-  private isZoneRelatedCall(
-    node: babel.types.CallExpression | babel.types.NewExpression
-  ): boolean {
-    if (!this.t.isCallExpression(node)) return false;
-
-    const callee = node.callee;
-    if (!this.t.isMemberExpression(callee)) return false;
-
-    // Zone.current.fork() 패턴 확인
-    if (
-      this.t.isMemberExpression(callee.object) &&
-      this.t.isIdentifier(callee.object.object) &&
-      callee.object.object.name === "Zone" &&
-      this.t.isIdentifier(callee.object.property) &&
-      callee.object.property.name === "current" &&
-      this.t.isIdentifier(callee.property) &&
-      callee.property.name === "fork"
-    ) {
-      return true;
-    }
-
-    return false;
-  }
-
-  //Emit error if returnValue is error(origin execution is failed)
-  public emitErrorIfReturnIsError() {
-    return this.t.ifStatement(
-      this.t.binaryExpression(
-        "instanceof",
-        this.t.identifier(ScryAstVariable.returnValue),
-        this.t.identifier("Error")
-      ),
-      this.t.blockStatement([
-        this.t.throwStatement(this.t.identifier(ScryAstVariable.returnValue)),
-      ])
-    );
-  }
-
-  //Create ast returnValue with origin execution
-  public createReturnValueWithOriginExecution(
-    path: babel.NodePath<babel.types.CallExpression>
-  ) {
-    const callee = path.node.callee;
-    return this.t.variableDeclaration("const", [
-      this.t.variableDeclarator(
-        this.t.identifier(ScryAstVariable.returnValue),
-        this.t.callExpression(callee, path.node.arguments)
-      ),
-    ]);
   }
 
   //Create emit trace event ast object
@@ -854,8 +663,6 @@ class ScryAst {
       type: TraceEventType;
       fnName: string;
       chained: boolean;
-      originCode: string;
-      classCode: string;
     }
   ) {
     return this.t.objectExpression([
@@ -923,7 +730,6 @@ class ScryAst {
   ) {
     const callee = path.node.callee;
     let fnName = ANONYMOUS_FUNCTION_NAME;
-
     if (this.t.isIdentifier(callee)) {
       fnName = callee.name;
     } else if (
@@ -936,7 +742,6 @@ class ScryAst {
         fnName = callee.property.name;
       }
     }
-
     return fnName;
   }
 
@@ -949,8 +754,6 @@ class ScryAst {
   ) {
     return this.t.arrayExpression(
       path.node.arguments.map((arg) => {
-        //  execute by call expression
-        //  function
         if (
           this.t.isArrowFunctionExpression(arg) ||
           this.t.isFunctionExpression(arg)
@@ -958,14 +761,11 @@ class ScryAst {
           const location = arg.loc
             ? `${arg.loc.start.line}:${arg.loc.start.column}`
             : UNKNOWN_LOCATION;
-
           const name =
             this.t.isFunctionExpression(arg) && arg.id
               ? arg.id.name
               : ANONYMOUS_FUNCTION_NAME;
-
           const params = arg.params ? `(${arg.params.length} params)` : "";
-
           const filePath =
             state?.filename?.split("/").slice(-2).join("/") || "";
 
@@ -973,23 +773,23 @@ class ScryAst {
             `[Function: ${name}${params} at ${filePath}:${location}]`
           );
         }
-        // string literal
+        //String literal
         else if (this.t.isStringLiteral(arg)) {
           return this.t.stringLiteral(arg.value);
         }
-        // numeric literal
+        //Numeric literal
         else if (this.t.isNumericLiteral(arg)) {
           return this.t.numericLiteral(Number(arg.value));
         }
-        // identifier (variable)
+        //Identifier (variable)
         else if (this.t.isIdentifier(arg)) {
           return this.t.identifier(arg.name);
         }
-        // object expression
+        //Object expression
         else if (this.t.isObjectExpression(arg)) {
           return arg;
         }
-        // other types
+        //Other types
         else {
           return this.t.stringLiteral(`[${arg.type}]`);
         }
@@ -1011,16 +811,6 @@ class ScryAst {
           : UNKNOWN_LOCATION
       }`
     );
-  }
-
-  //Get object name from object
-  private getObjectName(
-    object: babel.types.Expression | babel.types.Super
-  ): string {
-    if (this.t.isIdentifier(object)) {
-      return object.name;
-    }
-    return "";
   }
 }
 

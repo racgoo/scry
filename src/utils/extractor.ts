@@ -55,4 +55,4 @@ class Extractor {
     return null;
   }
 }
-export { Extractor };
+export default Extractor;
