@@ -65,8 +65,9 @@ In Node.js, trace results are saved as `HTML` files under the scry/report folder
 
 -  #### Report (WebUI)
 
-  <img width="1435" alt="스크린샷 2025-05-31 오전 12 42 51" src="https://github.com/user-attachments/assets/103f29d1-ba8c-4f70-b41d-601e21dc1c4a" />
-  <img width="1439" alt="스크린샷 2025-05-31 오전 12 43 17" src="https://github.com/user-attachments/assets/fb329923-f610-4662-9139-f35ac48da5c4" />
+  
+  <img width="1414" alt="image" src="https://github.com/user-attachments/assets/8b764af3-4f87-4c8b-ab32-98705ac0fd47" />
+
 
 
 
@@ -92,16 +93,18 @@ yarn add @racgoo/scry
 Add the following plugin to your babel.config.js or .babelrc file
 
 ```jsx
-import { scryBabelPlugin } from "@racgoo/scry";
-⚠️ Plugin setup may differ depending on the bundler you're using. ⚠️
-If setting things up feels difficult, please refer to the "examples" in the GitHub repository.
+import { scryBabelPluginForESM, scryBabelPluginForCJS } from "@racgoo/scry";
+//⚠️ Plugin setup may differ depending on the bundler you're using. ⚠️
+//If setting things up feels difficult, please refer to the "examples" in the GitHub repository.
 
 ----------------------------------------------------------------------
+/*
 #vite example (vite.config.js)
+ESM and CJS have identical execution behavior when using bundlers like Vite, with the module system determined by the type field in package.json (e.g., "module" for ESM, or "commonjs" for CJS).
+When writing code, you should match your import or require usage to the module type defined in package.json. However, since Babel is used for transpilation, it's important to choose Babel plugins that are compatible with the final output module system.
+In the case of Vite, which produces ESM-based output, you should use Babel plugins that are compatible with ESM.import { defineConfig } from "vite";
+*/
 
-!! ESM and CJS have identical execution behavior when using bundlers like Vite,
-with the module system determined by package.json type configuration ("module" or "commonjs").
-import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { scryBabelPlugin } from "@racgoo/scry";
 
@@ -112,28 +115,38 @@ export default defineConfig({
   plugins: [
     react({
       babel: {
-        plugins: [scryBabelPlugin],
+        plugins: [scryBabelPluginForESM],
+//if transfiled output's module system is ESM, use scryBabelPluginESM
+//if transfiled output's  module system is CJS, use scryBabelPluginCJS
       },
     }),
   ],
 });
 
 ----------------------------------------------------------------------
+/*
 #nodejs example (babel.config.js)
+In Node.js, you can also use either import or require based on the type field defined in package.json.
+However, when using Babel, you must choose and apply ESM or CJS-specific plugins based on the module system of the final transpiled output, not just the source code.
+*/
 
 1. ESM module system.(package.json.type === "module")
-import { scryBabelPlugin } from "@racgoo/scry"; 
+import { scryBabelPluginESM } from "@racgoo/scry"; 
 export default {
   presets: [],
-  plugins: [scryBabelPlugin],
+  plugins: [scryBabelPluginESM], 
+//if transfiled output's module system is ESM, use scryBabelPluginESM
+//if transfiled output's  module system is CJS, use scryBabelPluginCJS
+
 };
 
 2. CJS module system.(package.json.type === "commonjs")
-const { scryBabelPlugin } = require("@racgoo/scry");
+const { scryBabelPluginCJS } = require("@racgoo/scry");
 module.exports = {
   presets: [],
-  plugins: [scryBabelPlugin],
-};
+  plugins: [scryBabelPluginCJS],
+//if transfiled output's module system is ESM, use scryBabelPluginESM
+//if transfiled output's  module system is CJS, use scryBabelPluginCJS};
 
 
 ```
@@ -171,12 +184,29 @@ Tracer.end();
 Further improvements are underway to better validate and track function parameters and return values, especially for complex nodes such as `BinaryExpression`, `CallExpression`, and others.
 
 #### Async Function Support(~ing. comming soon:)
-
 Tracing for `asynchronous functions` is not yet implemented. Development is currently in progress.
+
+
+- Promise support. but.. don't support async/await( just use .then callback )
+- async/await will be supported soon!! :)
+
 
 #### Improved error messaging
 
 error handling and clearer error messages are currently under development.😅
+
+---
+
+### 🔧 Bugs [2025-06-8]
+
+##### Function, Class source code extracting is not working..
+##### Async/Await is not working...
+##### Detail page in UI System is not working...
+
+#### Don't worry about them~ I'll fix it :)
+believe me!
+
+
 
 ---
 
