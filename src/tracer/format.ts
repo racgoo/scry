@@ -1,10 +1,10 @@
 import dayjs from "dayjs";
 
-//data formatter for trace result
+//data formatter for trace result(Made by claude:))
 class Format {
   //Generate html root for trace result(zip all trace result)
   static generateHtmlRoot(
-    items: DisplayDetailResult[],
+    traceNodes: TraceNode[],
     startTime: dayjs.Dayjs,
     duration: number
   ): string {
@@ -143,7 +143,7 @@ class Format {
             .trace-list {
               display: flex;
               flex-direction: column;
-              gap: 0.75rem;
+              gap: 0rem;
               padding: 1rem;
             }
 
@@ -151,13 +151,31 @@ class Format {
               display: flex;
               align-items: center;
               padding: 0.75rem 1rem;
-              height: auto;
-              min-height: 3rem;
               background: var(--card-bg);
               border-radius: 8px;
               border: 1px solid var(--border-color);
               transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-              margin-left: calc(var(--depth, 0) * 20px);
+              margin-bottom: 0.5rem;
+            }
+
+            .children {
+              padding-left: 2rem;
+              position: relative;
+            }
+
+            .children::before {
+              content: '';
+              position: absolute;
+              left: 0.9rem;
+              top: 0;
+              bottom: 0.5rem;
+              width: 2px;
+              background: var(--border-color);
+              opacity: 0.5;
+            }
+
+            .children.hidden {
+              display: none;
             }
 
             .item-content {
@@ -431,7 +449,32 @@ class Format {
               transform: rotate(-90deg);
             }
 
-            .trace-item.nested.hidden {
+            .chain-group {
+              background: var(--card-bg);
+              border: 1px solid var(--primary-color);
+              border-radius: 12px;
+              padding: 0.5rem;
+              margin-bottom: 0rem;
+              box-shadow: 0 0 15px var(--primary-glow);
+              position: relative;
+              z-index: 1;
+            }
+
+            .chain-group .trace-item {
+              margin-bottom: 0.25rem;
+            }
+
+            .chain-group .trace-item:last-child {
+              margin-bottom: 0;
+            }
+
+            /* 체인 그룹 내의 children도 패딩 조정 */
+            .chain-group .children {
+              padding-left: 1.5rem;
+            }
+
+            /* 체인 그룹이 숨겨졌을 때의 스타일 */
+            .chain-group.hidden {
               display: none !important;
               height: 0 !important;
               margin: 0 !important;
@@ -442,20 +485,16 @@ class Format {
               overflow: hidden;
             }
 
-            /* 추가: 연속된 hidden 아이템들 사이의 gap 제거 */
-            .trace-item.nested.hidden + .trace-item.nested.hidden {
-              margin-top: -0.5rem;
-            }
-
-            .chain-group {
-              background: var(--card-bg);
-              border: 1px solid var(--primary-color);
-              border-radius: 12px;
-              padding: 1rem 0.75rem 0.75rem;
-              margin-bottom: 0;
-              box-shadow: 0 0 15px var(--primary-glow);
-              position: relative;
-              z-index: 1;
+            /* 부모가 숨겨졌을 때 체인 그룹도 숨김 */
+            .trace-item.hidden ~ .chain-group {
+              display: none !important;
+              height: 0 !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              opacity: 0;
+              pointer-events: none;
+              border: none;
+              overflow: hidden;
             }
 
             /* Chained 라벨 추가 */
@@ -491,12 +530,7 @@ class Format {
 
             /* 체인 그룹 내부 아이템 간격 조정 */
             .chain-group .trace-item + .trace-item {
-              margin-top: 1.0rem;
-            }
-
-            /* 체인 그룹 내부 마지막 아이템 마진 제거 */
-            .chain-group .trace-item:last-child {
-              margin-bottom: 0;
+              margin-top: 0rem;
             }
 
             .chain-group .trace-item:hover {
@@ -515,6 +549,7 @@ class Format {
                 Scry Trace Results
               </h1>
               <div class="subtitle">Visualize your code's execution journey with precision and elegance</div>
+              <div class="subtitle">The following output is displayed in a directory-like structure, representing the execution order of functions and the execution context at the scope level.</div>
               <div class="time-info">
                 <div class="time-item">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -555,7 +590,7 @@ class Format {
             </div>
 
             <div class="trace-list">
-              ${this.generateTraceList(items)}
+              ${this.generateTraceList(traceNodes)}
             </div>
           </div>
 
@@ -571,7 +606,7 @@ class Format {
           </div>
 
           <script>
-            const items = ${this.parseJson(items)};
+            const items = ${this.parseJson(traceNodes)};
             
             function showModal(index) {
               const modal = document.getElementById('modal');
@@ -595,48 +630,16 @@ class Format {
 
             hljs.highlightAll();
 
-            function collapseTrace(event, level) {
+            function collapseTrace(event, traceId) {
               event.preventDefault();
               event.stopPropagation();
               
               const button = event.currentTarget;
-              const isCollapsing = !button.classList.contains('collapsed');
-              button.classList.toggle('collapsed');
+              const childrenContainer = document.querySelector('[data-parent="' + traceId + '"]');
               
-              const currentItem = button.closest('.trace-item');
-              let next = currentItem.nextElementSibling;
-              
-              while (next) {
-                const nextLevel = parseInt(next.dataset.level);
-                if (nextLevel <= level) break;
-                
-                if (isCollapsing) {
-                  // 닫을 때: 현재 레벨보다 깊은 모든 항목을 숨김
-                  next.classList.add('hidden');
-                } else {
-                  // 열 때: 직계 자식만 보이게 하고, 나머지는 부모의 상태를 따라감
-                  if (nextLevel === level + 1) {
-                    next.classList.remove('hidden');
-                  } else {
-                    // 직계 자식이 아닌 경우, 모든 부모의 상태를 확인
-                    let parent = next.previousElementSibling;
-                    let shouldShow = true;
-                    
-                    while (parent && parseInt(parent.dataset.level) > level) {
-                      const parentButton = parent.querySelector('.collapse-btn');
-                      if (parentButton?.classList.contains('collapsed')) {
-                        shouldShow = false;
-                        break;
-                      }
-                      parent = parent.previousElementSibling;
-                    }
-                    
-                    if (shouldShow) {
-                      next.classList.remove('hidden');
-                    }
-                  }
-                }
-                next = next.nextElementSibling;
+              if (childrenContainer) {
+                button.classList.toggle('collapsed');
+                childrenContainer.classList.toggle('hidden');
               }
             }
           </script>
@@ -645,107 +648,78 @@ class Format {
     `;
   }
 
-  static generateTraceList(items: DisplayDetailResult[]): string {
-    if (!items || items.length === 0) return "";
-
-    // 트레이스 아이템 렌더링 함수
-    const renderTraceItem = (item: DisplayDetailResult, index: number) =>
-      '<div class="trace-item ' +
-      (item.depth > 0 ? "nested" : "") +
-      '" ' +
-      'data-level="' +
-      item.depth +
-      '" ' +
-      'style="--depth: ' +
-      item.depth +
-      '">' +
-      '<div class="trace-controls">' +
-      '<button class="collapse-btn" onclick="collapseTrace(event, ' +
-      item.depth +
-      ')">' +
-      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" pointer-events="none">' +
-      '<path d="M19 9l-7 7-7-7" pointer-events="none"/>' +
-      "</svg>" +
-      "</button>" +
-      "</div>" +
-      '<div class="item-content" onclick="showModal(' +
-      index +
-      ')">' +
-      '<div class="trace-icon">' +
-      '<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">' +
-      '<path d="M13 10V3L4 14h7v7l9-11h-7z"/>' +
-      "</svg>" +
-      "</div>" +
-      '<span class="trace-name">' +
-      item.title +
-      "</span>" +
-      "</div>" +
-      "</div>";
-
-    const processItems = (
-      startIndex: number,
-      parentDepth: number
-    ): [string, number] => {
+  static generateTraceList(traceNodes: TraceNode[]): string {
+    // 재귀적으로 트레이스 노드를 HTML로 변환하는 함수
+    const renderNode = (node: TraceNode, index: number): string => {
       let html = "";
-      let i = startIndex;
 
-      while (i < items.length) {
-        const item = items[i];
+      // 체인 그룹 시작 - 부모가 다른 체인의 일부가 아닐 때만 새로운 체인 그룹 시작
+      if (
+        node.chainInfo?.startTraceId === node.traceId &&
+        (!node.parent?.chainInfo ||
+          node.parent.chainInfo.startTraceId !== node.chainInfo.startTraceId)
+      ) {
+        html += '<div class="chain-group">';
+      }
 
-        // 현재 아이템이 없거나 부모 뎁스보다 얕은 경우 처리 중단
-        if (!item || item.depth <= parentDepth) {
-          break;
-        }
-
-        // 체인의 시작을 만났을 때
-        if (item.chainInfo?.startTraceId) {
-          const chainId = item.chainInfo.startTraceId;
-          html += '<div class="chain-group">';
-
-          // 현재 아이템 렌더링
-          html += renderTraceItem(item, i);
-          i++;
-
-          // 다음 아이템들 처리
-          while (i < items.length) {
-            const nextItem = items[i];
-            if (
-              !nextItem ||
-              nextItem.depth <= parentDepth ||
-              (nextItem.chainInfo?.startTraceId &&
-                nextItem.chainInfo.startTraceId !== chainId &&
-                nextItem.depth === item.depth)
-            ) {
-              break;
+      // 현재 노드 렌더링
+      html += `
+        <div class="trace-item${node.parent ? " nested" : ""}" data-trace-id="${
+        node.traceId
+      }"${
+        node.chainInfo ? ` data-chain-id="${node.chainInfo.startTraceId}"` : ""
+      }>
+          <div class="trace-controls">
+            ${
+              node.children.length > 0
+                ? `
+              <button class="collapse-btn" onclick="collapseTrace(event, '${node.traceId}')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" pointer-events="none">
+                  <path d="M19 9l-7 7-7-7" pointer-events="none"/>
+                </svg>
+              </button>
+            `
+                : ""
             }
+          </div>
+          <div class="item-content" onclick="showModal(${index})">
+            <div class="trace-icon">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+              </svg>
+            </div>
+            <span class="trace-name">${node.name}</span>
+          </div>
+        </div>
+      `;
 
-            // 새로운 체인 그룹 시작
-            if (
-              nextItem.chainInfo?.startTraceId &&
-              nextItem.chainInfo.startTraceId !== chainId
-            ) {
-              const [subHtml, newIndex] = processItems(i, item.depth);
-              html += subHtml;
-              i = newIndex;
-            } else {
-              html += renderTraceItem(nextItem, i);
-              i++;
-            }
-          }
+      // 자식 노드들 렌더링
+      if (node.children.length > 0) {
+        html += `<div class="children" data-parent="${node.traceId}">`;
+        node.children.forEach((child, idx) => {
+          html += renderNode(child, index + idx + 1);
+        });
+        html += "</div>";
+      }
 
+      // 체인 그룹 종료 - 다음 노드가 같은 체인이 아닐 때만 종료
+      if (node.chainInfo?.startTraceId === node.traceId) {
+        const nextSibling =
+          node.parent?.children[node.parent.children.indexOf(node) + 1];
+        if (
+          !nextSibling ||
+          !nextSibling.chainInfo ||
+          nextSibling.chainInfo.startTraceId !== node.chainInfo.startTraceId
+        ) {
           html += "</div>";
-        } else {
-          // 일반 아이템 렌더링
-          html += renderTraceItem(item, i);
-          i++;
         }
       }
 
-      return [html, i];
+      return html;
     };
 
-    const [finalHtml] = processItems(0, -1); // startIndex를 0으로 변경
-    return finalHtml;
+    // 최상위 노드들 처리
+    return traceNodes.map((node, index) => renderNode(node, index)).join("");
   }
 
   //Generate execution detail html
@@ -833,7 +807,7 @@ class Format {
               </div>
             </div>
             <div class="section-content">
-              <pre><code class="language-json">${this.parseJson(
+              <pre><code class="language-json">${Format.parseJson(
                 node.args
               )}</code></pre>
             </div>
@@ -849,7 +823,7 @@ class Format {
               </div>
             </div>
             <div class="section-content">
-              <pre><code class="language-javascript">${this.parseReturnValue(
+              <pre><code class="language-javascript">${Format.parseReturnValue(
                 node.returnValue
               )}</code></pre>
             </div>
@@ -874,42 +848,86 @@ class Format {
     `;
   }
 
-  //Parse return value to string(error stack or message)
-  private static parseReturnValue(returnValue: unknown): string {
-    if (returnValue instanceof Error) {
-      return returnValue.stack || returnValue.message;
-    } else if (returnValue instanceof Promise) {
-      return "[Promise]"; // Promise는 단순히 '[Promise]'로 표시
-    } else {
-      return JSON.stringify(returnValue, (key, value) => {
-        if (
-          value &&
-          typeof value === "object" &&
-          (value.constructor?.name?.includes("Zone") ||
-            key.includes("zone") ||
-            key.includes("Zone"))
-        ) {
-          return "[Zone Object]";
-        }
-        return value;
-      });
-    }
-  }
-
-  public static parseJson(value: unknown): string {
+  private static parseJson(value: unknown): string {
+    const seen = new WeakSet();
     return JSON.stringify(value, (key, value) => {
-      // Zone 관련 객체인지 확인
+      if (key === "parent") return undefined;
+      if (!value || typeof value !== "object") return value;
+      if (seen.has(value))
+        return `[Circular ${value.constructor?.name || "Object"}]`;
+      seen.add(value);
+
       if (
-        value &&
-        typeof value === "object" &&
-        (value.constructor?.name?.includes("Zone") ||
-          key.includes("zone") ||
-          key.includes("Zone"))
+        value.constructor?.name === "Timeout" ||
+        value.constructor?.name === "TimersList" ||
+        key === "_idleNext" ||
+        key === "_idlePrev"
+      ) {
+        return "[Timer Object]";
+      }
+
+      if (
+        value.constructor?.name?.includes("Zone") ||
+        key.includes("zone") ||
+        key.includes("Zone")
       ) {
         return "[Zone Object]";
       }
+
+      if (!Array.isArray(value) && "name" in value && "traceId" in value) {
+        (value as any).html = Format.generateHtmlContent(value as TraceNode);
+      }
+
       return value;
     });
+  }
+
+  private static parseReturnValue(value: unknown): string {
+    if (value instanceof Error) {
+      return value.stack || value.message;
+    }
+
+    if (value instanceof Promise) {
+      return "[Promise]";
+    }
+
+    try {
+      const seen = new WeakSet();
+      return JSON.stringify(value, (key, value) => {
+        if (!value) return value;
+
+        if (typeof value === "object") {
+          // Zone 객체 처리
+          if (
+            value.constructor?.name?.includes("Zone") ||
+            key.includes("zone") ||
+            key.includes("Zone")
+          ) {
+            return "[Zone Object]";
+          }
+
+          // Timer 객체 처리
+          if (
+            value.constructor?.name === "Timeout" ||
+            value.constructor?.name === "TimersList" ||
+            key === "_idleNext" ||
+            key === "_idlePrev"
+          ) {
+            return "[Timer Object]";
+          }
+
+          // 순환 참조 처리
+          if (seen.has(value)) {
+            return `[Circular ${value.constructor?.name || "Object"}]`;
+          }
+          seen.add(value);
+        }
+
+        return value;
+      });
+    } catch (e) {
+      return `[Unstringifiable ${value?.constructor?.name || typeof value}]`;
+    }
   }
 }
 

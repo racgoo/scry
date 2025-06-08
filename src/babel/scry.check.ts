@@ -1,6 +1,11 @@
 import { Environment } from "../utils/enviroment.js";
-import { DEVELOPMENT_MODE, TRACE_MARKER, TRACE_ZONE } from "./scry.constant.js";
-import { Extractor } from "../utils/extractor.js";
+import {
+  ACTIVE_TRACE_ID_SET,
+  DEVELOPMENT_MODE,
+  TRACE_MARKER,
+  TRACE_ZONE,
+} from "./scry.constant.js";
+import Extractor from "../utils/extractor.js";
 import * as babel from "@babel/core";
 
 //Checkers for scry babel plugin
@@ -9,7 +14,19 @@ class ScryChecker {
   constructor(t: typeof babel.types) {
     this.t = t;
   }
-  static isESM(filePath: string): boolean {
+  static isESM(state: babel.PluginPass): boolean {
+    const sourceType = state.file?.opts.parserOpts?.sourceType;
+    console.log("sourceType", sourceType);
+    if (sourceType === "script") {
+      //CJS
+      return false;
+    }
+    if (sourceType === "module") {
+      //ESM
+      return true;
+    }
+    //OTHERWISE by resolve with package.json
+    const filePath = state?.filename || "";
     const pkgJson = Extractor.extractNearestPackageJSON(filePath);
     if (!pkgJson) return false;
     return pkgJson?.type === "module";
@@ -30,6 +47,67 @@ class ScryChecker {
       callee.property.name === "createRoot"
     );
   }
+
+  public hasZoneRootActiveTraceSetInit(body: babel.types.Statement[]) {
+    return body.some((stmt) => {
+      if (!this.t.isExpressionStatement(stmt)) return false;
+      const expr = stmt.expression;
+      if (!this.t.isAssignmentExpression(expr)) return false;
+      if (expr.operator !== "=") return false;
+
+      const left = expr.left;
+      if (
+        this.t.isMemberExpression(left) &&
+        this.t.isMemberExpression(left.object) &&
+        this.t.isIdentifier(left.object.object, { name: "Zone" }) &&
+        this.t.isIdentifier(left.object.property, { name: "root" }) &&
+        this.t.isStringLiteral(left.property, {
+          value: ACTIVE_TRACE_ID_SET,
+        }) &&
+        left.computed
+      ) {
+        const right = expr.right;
+        if (
+          this.t.isNewExpression(right) &&
+          this.t.isIdentifier(right.callee, { name: "Set" }) &&
+          right.arguments.length === 0
+        ) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+  }
+
+  //Check if the function is a Zone.root[ACTIVE_TRACE_ID_SET] = new Set() initialization
+  public isZoneRootInitialization(
+    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
+  ) {
+    if (this.t.isNewExpression(path.node)) {
+      const parent = path.parentPath;
+      if (
+        parent &&
+        this.t.isAssignmentExpression(parent.node) &&
+        parent.node.operator === "=" &&
+        this.t.isMemberExpression(parent.node.left) &&
+        this.t.isMemberExpression(parent.node.left.object) &&
+        this.t.isIdentifier(parent.node.left.object.object, { name: "Zone" }) &&
+        this.t.isIdentifier(parent.node.left.object.property, {
+          name: "root",
+        }) &&
+        this.t.isStringLiteral(parent.node.left.property, {
+          value: ACTIVE_TRACE_ID_SET,
+        }) &&
+        parent.node.left.computed
+      ) {
+        parent.skip();
+        return true;
+      }
+    }
+    return false;
+  }
+
   //Check if the function is a TraceZone initialization or zone.js code
   public isTraceZoneInitialization(node: babel.types.Node): boolean {
     if (!this.t.isCallExpression(node)) return false;
@@ -94,12 +172,29 @@ class ScryChecker {
   public isDuplicateFunction(
     path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
   ) {
-    const callee = path.node.callee;
+    // const callee = path.node.callee;
     return (
-      this.t.isArrowFunctionExpression(callee) ||
+      // this.t.isArrowFunctionExpression(callee) ||
       path.node.leadingComments?.some((comment) =>
         comment.value.includes(TRACE_MARKER)
       )
+    );
+  }
+
+  //
+  public isNodejsProcessFunction(
+    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
+  ) {
+    return (
+      (this.t.isMemberExpression(path.node.callee) &&
+        this.t.isIdentifier(path.node.callee.object) &&
+        path.node.callee.object.name === "process" &&
+        this.t.isIdentifier(path.node.callee.property) &&
+        ["on", "emit"].includes(path.node.callee.property.name)) ||
+      //Check if the function is a process function
+      (this.t.isMemberExpression(path.node.callee) &&
+        this.t.isIdentifier(path.node.callee.object) &&
+        path.node.callee.object.name === "process")
     );
   }
 

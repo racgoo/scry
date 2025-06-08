@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { scryBabelPlugin } from "@racgoo/scry";
+import { scryBabelPluginForESM } from "@racgoo/scry";
 
 export default defineConfig({
   resolve: {
@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [
     react({
       babel: {
-        plugins: [scryBabelPlugin],
+        plugins: [scryBabelPluginForESM],
       },
     }),
   ],
