@@ -8,6 +8,7 @@ import {
   UNKNOWN_LOCATION,
   TRACE_ZONE,
   ACTIVE_TRACE_ID_SET,
+  PARENT_TRACE_ID_MARKER,
   // ACTIVE_TRACE_ID_SET,
 } from "./scry.constant.js";
 import ScryChecker from "./scry.check.js";
@@ -17,6 +18,125 @@ class ScryAst {
   private t: typeof babel.types;
   constructor(t: typeof babel.types) {
     this.t = t;
+  }
+
+  // public findParentTraceIdIdentifier(path: babel.NodePath) {
+  //   // 1. 상위 함수나 프로그램 찾기
+  //   const fnOrProgram:  = path.findParent((p) =>
+  //     p.isFunction()
+  //   ) as babel.NodePath<babel.types.BlockParent>;
+
+  //   if (!fnOrProgram || !fnOrProgram?.node) return null;
+
+  //   // 2. 함수 내부 블록에서 VariableDeclaration 찾기
+  //   for (const stmt of fnOrProgram.node.) {
+  //     if (this.t.isVariableDeclaration(stmt)) {
+  //       const leadingComments = stmt.leadingComments || [];
+  //       const hasMark = leadingComments.some((c) =>
+  //         c.value.includes("__PARENT_TRACE_ID_MARK__")
+  //       );
+  //       if (hasMark) {
+  //         const firstDecl = stmt.declarations[0];
+  //         if (firstDecl && this.t.isIdentifier(firstDecl.id)) {
+  //           return firstDecl.id;
+  //         }
+  //       }
+  //     }
+  //   }
+
+  //   return null;
+  // }
+
+  public createParentTraceIdOptionalUpdater(
+    path: babel.NodePath<babel.types.Node>
+  ) {
+    const parentTraceIdIdentifier = (() => {
+      const fnPath = path.findParent(
+        (p) =>
+          p.isFunctionDeclaration() ||
+          p.isFunctionExpression() ||
+          p.isArrowFunctionExpression() ||
+          p.isClassMethod() ||
+          p.isObjectMethod()
+      );
+      if (!fnPath) {
+        return null;
+      }
+      const fnNode = fnPath.node;
+      const body = (
+        (fnNode as { body: babel.types.BlockStatement })
+          .body as babel.types.BlockStatement
+      ).body;
+      if (!body) return null;
+      const targetNode = body.find((stmt: babel.types.Node) => {
+        return (
+          this.t.isVariableDeclaration(stmt) &&
+          this.t.isStringLiteral(stmt.declarations[0].init) &&
+          stmt.declarations[0].init.value === PARENT_TRACE_ID_MARKER
+        );
+      });
+      if (targetNode) {
+        return (targetNode as babel.types.VariableDeclaration).declarations[0]
+          .id;
+      } else {
+        return null;
+      }
+    })();
+
+    if (!parentTraceIdIdentifier) return this.t.emptyStatement();
+    return this.t.ifStatement(
+      this.t.binaryExpression(
+        "===",
+        parentTraceIdIdentifier as babel.types.Expression,
+        this.t.stringLiteral(PARENT_TRACE_ID_MARKER)
+      ),
+      this.t.blockStatement([
+        this.t.expressionStatement(
+          this.t.assignmentExpression(
+            "=",
+            parentTraceIdIdentifier,
+            this.t.memberExpression(
+              this.t.memberExpression(
+                this.t.identifier("Zone"),
+                this.t.identifier("current")
+              ),
+              this.t.identifier("name")
+            )
+          )
+        ),
+      ])
+    );
+  }
+
+  public createParentTraceDeclare(
+    path: babel.NodePath<
+      | babel.types.Program
+      | babel.types.FunctionDeclaration
+      | babel.types.FunctionExpression
+      | babel.types.ArrowFunctionExpression
+      | babel.types.ObjectMethod
+      | babel.types.ClassMethod
+    >
+  ) {
+    const parentDecl = this.t.variableDeclaration("let", [
+      this.t.variableDeclarator(
+        this.t.identifier(ScryAstVariable.parentTraceId),
+        this.t.stringLiteral(PARENT_TRACE_ID_MARKER)
+      ),
+    ]);
+
+    if (path.isProgram()) {
+      //For Program level(Top level global variable)
+      (path.node.body as babel.types.Statement[]).unshift(parentDecl);
+      return;
+    } else {
+      //For other level(Function, Class, etc.)
+      const body = path.node.body as babel.types.BlockStatement;
+      if (!this.t.isBlockStatement(body)) {
+        path.node.body = this.t.blockStatement([this.t.returnStatement(body)]);
+      }
+      (path.node.body as babel.types.BlockStatement).body.unshift(parentDecl);
+    }
   }
 
   public createCodeExtractor() {
@@ -300,6 +420,25 @@ class ScryAst {
     );
   }
 
+  //Add trace id to active trace id set(Zone root)
+  public createActiveTraceIdRemover() {
+    return this.t.expressionStatement(
+      this.t.callExpression(
+        this.t.memberExpression(
+          this.t.memberExpression(
+            this.t.memberExpression(
+              this.t.identifier("Zone"),
+              this.t.identifier("root")
+            ),
+            this.t.identifier(ACTIVE_TRACE_ID_SET)
+          ),
+          this.t.identifier("delete")
+        ),
+        [this.t.identifier(ScryAstVariable.traceId)]
+      )
+    );
+  }
+
   //Create ast marker variable
   public createMarkerVariable() {
     return this.t.variableDeclaration("const", [
@@ -348,8 +487,237 @@ class ScryAst {
     ]);
   }
 
+  public createDeclareTraceZoneWithTraceId() {
+    return this.t.variableDeclaration("const", [
+      this.t.variableDeclarator(
+        this.t.identifier(TRACE_ZONE),
+        this.t.memberExpression(
+          this.t.identifier("Zone"),
+          this.t.identifier(ScryAstVariable.traceId),
+          true
+        )
+      ),
+    ]);
+  }
+
   //Get parent trace id from current zone(with zone.js scope)
   public craeteGlobalParentTraceIdSetterWithTraceId() {
+    return this.t.expressionStatement(
+      this.t.assignmentExpression(
+        "=",
+        this.t.memberExpression(
+          this.t.identifier("Zone"),
+          this.t.identifier(ScryAstVariable.traceId),
+          true
+        ),
+        this.t.callExpression(
+          this.t.memberExpression(
+            this.t.logicalExpression(
+              "||",
+              this.t.memberExpression(
+                this.t.identifier("Zone"),
+                this.t.identifier(ScryAstVariable.parentTraceId),
+                true // Zone["test"]
+              ),
+              this.t.memberExpression(
+                this.t.identifier("Zone"),
+                this.t.identifier("root")
+              )
+            ),
+            this.t.identifier("fork")
+          ),
+          [
+            this.t.objectExpression([
+              this.t.objectProperty(
+                this.t.identifier("name"),
+                this.t.identifier(ScryAstVariable.traceId)
+              ),
+              this.t.objectProperty(
+                this.t.identifier("properties"),
+                this.t.objectExpression([
+                  this.t.objectProperty(
+                    this.t.identifier(ScryAstVariable.parentTraceId),
+                    this.t.identifier(ScryAstVariable.traceId)
+                  ),
+                ])
+              ),
+              this.t.objectProperty(
+                this.t.identifier("onInvoke"),
+                this.t.functionExpression(
+                  null,
+                  [
+                    this.t.identifier("parentZoneDelegate"),
+                    this.t.identifier("currentZone"),
+                    this.t.identifier("targetZone"),
+                    this.t.identifier("delegate"),
+                    this.t.identifier("applyThis"),
+                    this.t.identifier("args"),
+                    this.t.identifier("source"),
+                  ],
+                  this.t.blockStatement([
+                    // this.t.expressionStatement(
+                    //   this.t.callExpression(
+                    //     this.t.memberExpression(
+                    //       this.t.memberExpression(
+                    //         this.t.memberExpression(
+                    //           this.t.identifier("Zone"),
+                    //           this.t.identifier("root")
+                    //         ),
+                    //         this.t.stringLiteral(ACTIVE_TRACE_ID_SET),
+                    //         true
+                    //       ),
+                    //       this.t.identifier("add")
+                    //     ),
+                    //     [this.t.identifier(ScryAstVariable.traceId)]
+                    //   )
+                    // ),
+                    this.t.expressionStatement(
+                      this.t.callExpression(
+                        this.t.identifier("queueMicrotask"),
+                        [
+                          this.t.functionExpression(
+                            null,
+                            [],
+                            this.t.blockStatement([
+                              this.t.expressionStatement(
+                                this.t.stringLiteral(
+                                  "this is only onHasTaskQueue Trigger"
+                                )
+                              ),
+                            ])
+                          ),
+                        ]
+                      )
+                    ),
+                    this.t.returnStatement(
+                      this.t.callExpression(
+                        this.t.memberExpression(
+                          this.t.identifier("parentZoneDelegate"),
+                          this.t.identifier("invoke")
+                        ),
+                        [
+                          this.t.identifier("targetZone"),
+                          this.t.identifier("delegate"),
+                          this.t.identifier("applyThis"),
+                          this.t.identifier("args"),
+                          this.t.identifier("source"),
+                        ]
+                      )
+                    ),
+                  ])
+                )
+              ),
+              this.t.objectProperty(
+                this.t.identifier("onHasTask"),
+                this.t.functionExpression(
+                  null,
+                  [
+                    this.t.identifier("delegate"),
+                    this.t.identifier("current"),
+                    this.t.identifier("target"),
+                    this.t.identifier("hasTaskState"),
+                  ],
+                  this.t.blockStatement([
+                    this.t.expressionStatement(
+                      this.t.callExpression(
+                        this.t.memberExpression(
+                          this.t.identifier("delegate"),
+                          this.t.identifier("hasTask")
+                        ),
+                        [
+                          this.t.identifier("target"),
+                          this.t.identifier("hasTaskState"),
+                        ]
+                      )
+                    ),
+                    this.t.variableDeclaration("const", [
+                      this.t.variableDeclarator(
+                        this.t.identifier("allDone"),
+                        this.t.logicalExpression(
+                          "&&",
+                          this.t.unaryExpression(
+                            "!",
+                            this.t.memberExpression(
+                              this.t.identifier("hasTaskState"),
+                              this.t.identifier("microTask")
+                            )
+                          ),
+                          this.t.logicalExpression(
+                            "&&",
+                            this.t.unaryExpression(
+                              "!",
+                              this.t.memberExpression(
+                                this.t.identifier("hasTaskState"),
+                                this.t.identifier("macroTask")
+                              )
+                            ),
+                            this.t.unaryExpression(
+                              "!",
+                              this.t.memberExpression(
+                                this.t.identifier("hasTaskState"),
+                                this.t.identifier("eventTask")
+                              )
+                            )
+                          )
+                        )
+                      ),
+                    ]),
+                    this.t.ifStatement(
+                      this.t.identifier("allDone"),
+                      this.t.blockStatement([
+                        this.t.ifStatement(
+                          this.t.callExpression(
+                            this.t.memberExpression(
+                              this.t.memberExpression(
+                                this.t.memberExpression(
+                                  this.t.identifier("Zone"),
+                                  this.t.identifier("root")
+                                ),
+                                this.t.stringLiteral(ACTIVE_TRACE_ID_SET),
+                                true
+                              ),
+                              this.t.identifier("has")
+                            ),
+                            [this.t.identifier(ScryAstVariable.traceId)]
+                          ),
+                          this.t.blockStatement([
+                            // this.t.expressionStatement(
+                            //   this.t.callExpression(
+                            //     this.t.memberExpression(
+                            //       this.t.memberExpression(
+                            //         this.t.memberExpression(
+                            //           this.t.identifier("Zone"),
+                            //           this.t.identifier("root")
+                            //         ),
+                            //         this.t.stringLiteral(ACTIVE_TRACE_ID_SET),
+                            //         true
+                            //       ),
+                            //       this.t.identifier("delete")
+                            //     ),
+                            //     [this.t.identifier(ScryAstVariable.traceId)]
+                            //   )
+                            // ),
+                          ])
+                        ),
+                      ])
+                    ),
+                  ])
+                )
+              ),
+            ]),
+          ]
+        )
+      )
+    );
+
+    // this.t.memberExpression(
+    //   this.t.memberExpression(
+    //     this.t.identifier("Zone"),
+    //     this.t.identifier("current")
+    //   ),
+    //   this.t.identifier("fork")
+    // ),
+
     return this.t.variableDeclaration("const", [
       this.t.variableDeclarator(
         this.t.identifier(TRACE_ZONE),
@@ -357,9 +725,10 @@ class ScryAst {
           this.t.memberExpression(
             this.t.memberExpression(
               this.t.identifier("Zone"),
-              this.t.identifier("current")
+              this.t.identifier(ScryAstVariable.parentTraceId), // <-- ["test"]
+              true // <-- computed: true → makes it Zone["test"]
             ),
-            this.t.identifier("fork")
+            this.t.identifier("fork") // .fork
           ),
           [
             this.t.objectExpression([
@@ -424,6 +793,41 @@ class ScryAst {
                         ]
                       )
                     ),
+                    // this.t.ifStatement(
+                    //   this.t.logicalExpression(
+                    //     "&&",
+                    //     this.t.identifier("delegate"),
+                    //     this.t.callExpression(
+                    //       this.t.memberExpression(
+                    //         this.t.callExpression(
+                    //           this.t.memberExpression(
+                    //             this.t.identifier("delegate"),
+                    //             this.t.identifier("toString")
+                    //           ),
+                    //           []
+                    //         ),
+                    //         this.t.identifier("includes")
+                    //       ),
+                    //       [this.t.stringLiteral("async")]
+                    //     )
+                    //   ),
+                    //   this.t.blockStatement([
+                    //     this.t.expressionStatement(
+                    //       this.t.assignmentExpression(
+                    //         "=",
+                    //         this.t.memberExpression(
+                    //           this.t.memberExpression(
+                    //             this.t.identifier("currentZone"),
+                    //             this.t.identifier("_properties")
+                    //           ),
+                    //           this.t.stringLiteral("parentTraceId"),
+                    //           true
+                    //         ),
+                    //         this.t.identifier("traceId")
+                    //       )
+                    //     ),
+                    //   ])
+                    // ),
                     this.t.returnStatement(
                       this.t.callExpression(
                         this.t.memberExpression(
@@ -442,6 +846,64 @@ class ScryAst {
                   ])
                 )
               ),
+              // this.t.objectProperty(
+              //   this.t.identifier("zoneSpec"),
+              //   this.t.objectExpression([
+              //     this.t.objectMethod(
+              //       "method",
+              //       this.t.identifier("onFork"),
+              //       [
+              //         this.t.identifier("parentZoneDelegate"),
+              //         this.t.identifier("currentZone"),
+              //         this.t.identifier("targetZone"),
+              //         this.t.identifier("zoneSpec"),
+              //       ],
+              //       this.t.blockStatement([
+              //         // zoneSpec.properties = { ...zoneSpec.properties, parentTraceId: currentZone.get('parentTraceId') };
+              //         this.t.expressionStatement(
+              //           this.t.assignmentExpression(
+              //             "=",
+              //             this.t.memberExpression(
+              //               this.t.identifier("zoneSpec"),
+              //               this.t.identifier("properties")
+              //             ),
+              //             this.t.objectExpression([
+              //               this.t.spreadElement(
+              //                 this.t.memberExpression(
+              //                   this.t.identifier("zoneSpec"),
+              //                   this.t.identifier("properties")
+              //                 )
+              //               ),
+              //               this.t.objectProperty(
+              //                 this.t.identifier("parentTraceId"),
+              //                 this.t.callExpression(
+              //                   this.t.memberExpression(
+              //                     this.t.identifier("currentZone"),
+              //                     this.t.identifier("get")
+              //                   ),
+              //                   [this.t.stringLiteral("parentTraceId")]
+              //                 )
+              //               ),
+              //             ])
+              //           )
+              //         ),
+              //         // return parentZoneDelegate.fork(targetZone, zoneSpec);
+              //         this.t.returnStatement(
+              //           this.t.callExpression(
+              //             this.t.memberExpression(
+              //               this.t.identifier("parentZoneDelegate"),
+              //               this.t.identifier("fork")
+              //             ),
+              //             [
+              //               this.t.identifier("targetZone"),
+              //               this.t.identifier("zoneSpec"),
+              //             ]
+              //           )
+              //         ),
+              //       ])
+              //     ),
+              //   ])
+              // ),
               this.t.objectProperty(
                 this.t.identifier("onHasTask"),
                 this.t.functionExpression(
@@ -581,26 +1043,133 @@ class ScryAst {
   ) {
     //Get original call expression
     const originalCall = path.node;
-    //Create ast returnValue with origin execution
-    const resultAst = this.t.expressionStatement(
-      this.t.assignmentExpression(
-        "=",
-        this.t.identifier(ScryAstVariable.returnValue),
-        this.t.callExpression(
-          this.t.memberExpression(
-            this.t.identifier(TRACE_ZONE),
-            this.t.identifier("run")
-          ),
-          [
-            this.t.functionExpression(
-              null,
-              [],
-              this.t.blockStatement([this.t.returnStatement(originalCall)])
-            ),
-          ]
-        )
-      )
+    let resultAst: babel.types.ExpressionStatement = this.t.expressionStatement(
+      this.t.nullLiteral()
     );
+    try {
+      //Create ast returnValue with origin execution
+      resultAst = this.t.expressionStatement(
+        this.t.assignmentExpression(
+          "=",
+          this.t.identifier(ScryAstVariable.returnValue),
+          this.t.callExpression(
+            this.t.memberExpression(
+              this.t.identifier(TRACE_ZONE),
+              this.t.identifier("run")
+            ),
+            [
+              this.t.arrowFunctionExpression(
+                [],
+                this.t.blockStatement([
+                  this.t.variableDeclaration("const", [
+                    this.t.variableDeclarator(
+                      this.t.identifier("originalCallReturnValue"),
+                      originalCall
+                    ),
+                  ]),
+
+                  this.t.ifStatement(
+                    this.t.logicalExpression(
+                      "&&",
+                      this.t.identifier("originalCallReturnValue"),
+                      this.t.memberExpression(
+                        this.t.identifier("originalCallReturnValue"),
+                        this.t.identifier("then")
+                      )
+                    ),
+                    this.t.blockStatement([
+                      this.t.expressionStatement(
+                        this.t.callExpression(
+                          this.t.memberExpression(
+                            this.t.identifier("originalCallReturnValue"),
+                            this.t.identifier("then")
+                          ),
+                          [
+                            this.t.arrowFunctionExpression(
+                              [],
+                              this.t.blockStatement([
+                                this.t.expressionStatement(
+                                  this.t.callExpression(
+                                    this.t.memberExpression(
+                                      this.t.memberExpression(
+                                        this.t.memberExpression(
+                                          this.t.identifier("Zone"),
+                                          this.t.identifier("root")
+                                        ),
+                                        this.t.stringLiteral(
+                                          ACTIVE_TRACE_ID_SET
+                                        ),
+                                        true
+                                      ),
+                                      this.t.identifier("delete")
+                                    ),
+                                    [this.t.identifier(ScryAstVariable.traceId)]
+                                  )
+                                ),
+                              ])
+                            ),
+                          ]
+                        )
+                      ),
+                    ]),
+                    this.t.blockStatement([
+                      this.t.expressionStatement(
+                        this.t.callExpression(
+                          this.t.memberExpression(
+                            this.t.memberExpression(
+                              this.t.memberExpression(
+                                this.t.identifier("Zone"),
+                                this.t.identifier("root")
+                              ),
+                              this.t.stringLiteral(ACTIVE_TRACE_ID_SET),
+                              true
+                            ),
+                            this.t.identifier("delete")
+                          ),
+                          [this.t.identifier(ScryAstVariable.traceId)]
+                        )
+                      ),
+                    ])
+                  ),
+                  // this.t.expressionStatement(
+                  //   this.t.callExpression(
+                  //     this.t.memberExpression(
+                  //       this.t.identifier("originalCallReturnValue"),
+                  //       this.t.identifier("then")
+                  //     ),
+                  //     [
+                  //       this.t.arrowFunctionExpression(
+                  //         [],
+                  //         this.t.blockStatement([
+                  //           this.t.expressionStatement(
+                  //             this.t.stringLiteral("trigger!!")
+                  //           ),
+                  //         ])
+                  //       ),
+                  //     ]
+                  //   )
+                  // ),
+
+                  this.t.returnStatement(
+                    this.t.identifier("originalCallReturnValue")
+                  ),
+                ])
+              ),
+              // this.t.arrowFunctionExpression(
+              //   [],
+              //   this.t.blockStatement([this.t.returnStatement(originalCall)])
+              // ),
+            ]
+          )
+        )
+      );
+    } catch (error) {
+      console.error(
+        "craeteReturnValueUpdaterWithOriginExecution error:",
+        error
+      );
+    }
+
     //Create try block
     const tryBlock = this.t.blockStatement([resultAst]);
     //Create catch clause
@@ -715,7 +1284,9 @@ class ScryAst {
       ),
       this.t.objectProperty(
         this.t.identifier(ScryAstVariable.parentTraceId),
-        this.t.identifier(ScryAstVariable.parentTraceId)
+        this.t.identifier(ScryAstVariable.parentTraceId) // 존재할 경우
+          ? this.t.identifier(ScryAstVariable.parentTraceId)
+          : this.t.identifier("undefined")
       ),
       this.t.objectProperty(
         this.t.identifier(ScryAstVariable.args),

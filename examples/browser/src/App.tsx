@@ -6,23 +6,21 @@ import { Tracer } from "@racgoo/scry";
 function asyncTest2(flag: string) {
   return new Promise((resolve) => setTimeout(() => resolve(flag), 1000));
 }
-function asyncTest1(flag: string) {
-  console.log("asyncTest");
-  asyncTest2(flag + ":first").then((res) => {
-    console.log(res + "second");
-    asyncTest2(flag + ":third").then((res) => {
-      console.log(res + "fourth");
-    });
+async function asyncTest1(flag: string) {
+  asyncTest2(flag + ":third").then((res) => {
+    console.log(res);
   });
   return "hi";
 }
 
 function App() {
-  function test() {
+  async function test() {
     Tracer.start();
-
-    asyncTest1("AsyncTest start");
-
+    await asyncTest1("test");
+    asyncTest2("test" + ":third").then((res) => {
+      console.log(res);
+    });
+    await asyncTest1("test");
     Tracer.end();
   }
   return (
