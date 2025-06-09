@@ -14,6 +14,8 @@ export const DEVELOPMENT_MODE = "development";
 export const TRACE_ZONE = "TraceZone";
 //Name for active trace id set(with zone.js)
 export const ACTIVE_TRACE_ID_SET = "ActiveTraceIdSet";
+//Marker for parent trace id declare
+export const PARENT_TRACE_ID_MARKER = "__PARENT_TRACE_ID_MARK__";
 
 //Event type for trace event
 export const ScryEventType = {

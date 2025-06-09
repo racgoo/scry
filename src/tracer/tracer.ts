@@ -60,10 +60,12 @@ class Tracer {
       await new Promise((resolve) => setTimeout(resolve, 10));
       if (this.isAllContextDone()) break;
     }
+
     //Make trace tree(hierarchical tree structure by call)
     const traceNodes: TraceNode[] = this.makeTraceNodes(this.details);
+
     //Remove last node. it's not a trace node, it's Trace.end() command.. :( need refactor
-    traceNodes.pop();
+    // traceNodes.pop();
     //Update duration
     this.duration = dayjs().diff(this.startTime, "ms");
     //Remove event listener according to the execution environment
@@ -184,6 +186,7 @@ class Tracer {
         }
       }
     }
+
     return traceNodes;
   }
 

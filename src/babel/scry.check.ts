@@ -16,7 +16,6 @@ class ScryChecker {
   }
   static isESM(state: babel.PluginPass): boolean {
     const sourceType = state.file?.opts.parserOpts?.sourceType;
-    console.log("sourceType", sourceType);
     if (sourceType === "script") {
       //CJS
       return false;
@@ -45,6 +44,19 @@ class ScryChecker {
         callee.object.name === "ReactDOMClient") &&
       this.t.isIdentifier(callee.property) &&
       callee.property.name === "createRoot"
+    );
+  }
+
+  public isTracerMethod(
+    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
+  ) {
+    const callee = path.node.callee;
+    return (
+      this.t.isMemberExpression(callee) &&
+      this.t.isIdentifier(callee.object) &&
+      callee.object.name === "Tracer" &&
+      (this.t.isIdentifier(callee.property, { name: "start" }) ||
+        this.t.isIdentifier(callee.property, { name: "end" }))
     );
   }
 

@@ -143,8 +143,18 @@ class Format {
             .trace-list {
               display: flex;
               flex-direction: column;
-              gap: 0rem;
+              gap: 1rem;
               padding: 1rem;
+              margin-bottom: 1rem;
+            }
+
+            .trace-list:last-child {
+              margin-bottom: 0;
+            }
+
+            .trace-list > .trace-item,
+            .trace-list > .chain-group {
+              margin-bottom: 0;
             }
 
             .trace-item {
@@ -155,7 +165,6 @@ class Format {
               border-radius: 8px;
               border: 1px solid var(--border-color);
               transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-              margin-bottom: 0.5rem;
             }
 
             .children {
@@ -453,7 +462,7 @@ class Format {
               background: var(--card-bg);
               border: 1px solid var(--primary-color);
               border-radius: 12px;
-              padding: 0.5rem;
+              padding: 0px;
               margin-bottom: 0rem;
               box-shadow: 0 0 15px var(--primary-glow);
               position: relative;
@@ -504,7 +513,7 @@ class Format {
               top: -0.75rem;
               left: 1rem;
               background: linear-gradient(135deg, var(--primary-dark), var(--accent-color));
-              padding: 0.25rem 0.75rem;
+              padding: 4px 0px 0px 0px;
               border-radius: 6px;
               font-size: 0.75rem;
               font-weight: 500;
@@ -589,9 +598,10 @@ class Format {
               </div>
             </div>
 
-            <div class="trace-list">
-              ${this.generateTraceList(traceNodes)}
+            <div>
+            ${this.generateTraceList(traceNodes)}
             </div>
+            
           </div>
 
           <div id="modal" class="modal" onclick="closeModal(event)">
@@ -653,29 +663,23 @@ class Format {
     const renderNode = (node: TraceNode, index: number): string => {
       let html = "";
 
-      // 체인 그룹 시작 - 부모가 다른 체인의 일부가 아닐 때만 새로운 체인 그룹 시작
-      if (
-        node.chainInfo?.startTraceId === node.traceId &&
-        (!node.parent?.chainInfo ||
-          node.parent.chainInfo.startTraceId !== node.chainInfo.startTraceId)
-      ) {
-        html += '<div class="chain-group">';
+      // 체인 그룹 시작
+      if (node.chainInfo?.startTraceId) {
+        if (node.chainInfo.startTraceId === node.traceId) {
+          html += '<div class="chain-group">';
+        }
       }
 
       // 현재 노드 렌더링
       html += `
-        <div class="trace-item${node.parent ? " nested" : ""}" data-trace-id="${
-        node.traceId
-      }"${
-        node.chainInfo ? ` data-chain-id="${node.chainInfo.startTraceId}"` : ""
-      }>
+        <div class="trace-item" data-trace-id="${node.traceId}">
           <div class="trace-controls">
             ${
               node.children.length > 0
                 ? `
               <button class="collapse-btn" onclick="collapseTrace(event, '${node.traceId}')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" pointer-events="none">
-                  <path d="M19 9l-7 7-7-7" pointer-events="none"/>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 9l-7 7-7-7"/>
                 </svg>
               </button>
             `
@@ -696,30 +700,37 @@ class Format {
       // 자식 노드들 렌더링
       if (node.children.length > 0) {
         html += `<div class="children" data-parent="${node.traceId}">`;
-        node.children.forEach((child, idx) => {
-          html += renderNode(child, index + idx + 1);
+        node.children.forEach((child, childIndex) => {
+          html += renderNode(child, index + childIndex + 1);
         });
         html += "</div>";
       }
 
-      // 체인 그룹 종료 - 다음 노드가 같은 체인이 아닐 때만 종료
-      if (node.chainInfo?.startTraceId === node.traceId) {
-        const nextSibling =
-          node.parent?.children[node.parent.children.indexOf(node) + 1];
-        if (
-          !nextSibling ||
-          !nextSibling.chainInfo ||
-          nextSibling.chainInfo.startTraceId !== node.chainInfo.startTraceId
-        ) {
-          html += "</div>";
-        }
+      // 체인 그룹 종료
+      const nextNode = traceNodes[index + 1];
+      if (
+        node.chainInfo?.startTraceId &&
+        (!nextNode ||
+          nextNode.chainInfo?.startTraceId !== node.chainInfo.startTraceId)
+      ) {
+        html += "</div>";
       }
 
       return html;
     };
 
-    // 최상위 노드들 처리
-    return traceNodes.map((node, index) => renderNode(node, index)).join("");
+    // 각 최상위 노드를 개별적인 trace-list div로 감싸기
+    return traceNodes
+      .filter((node) => !node.parent)
+      .map(
+        (node, index) => renderNode(node, index)
+        //   `
+        //   <div class="trace-list">
+        //     ${renderNode(node, index)}
+        //   </div>
+        // `
+      )
+      .join("");
   }
 
   //Generate execution detail html

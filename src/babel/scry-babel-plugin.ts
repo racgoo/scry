@@ -19,11 +19,23 @@ function scryBabelPlugin(
         const scryChecker = new ScryChecker(t);
         this.file.path.traverse({
           FunctionDeclaration(path) {
-            scryAst.preProcess(path, scryAst, scryChecker, code);
+            //Pre process for origin code comment
+            try {
+              scryAst.preProcess(path, scryAst, scryChecker, code);
+            } catch (error) {
+              console.error("pre process FunctionDeclaration error:", error);
+            }
           },
           ClassDeclaration(path) {
-            scryAst.preProcess(path, scryAst, scryChecker, code);
+            //Pre process for origin code comment
+            try {
+              scryAst.preProcess(path, scryAst, scryChecker, code);
+            } catch (error) {
+              console.error("pre process ClassDeclaration error:", error);
+            }
           },
+          //Add parent trace id declare
+          //Add parent trace id declare
         });
       }
     } catch (error) {
@@ -45,6 +57,7 @@ function scryBabelPlugin(
           const esm = type === "esm";
           const scryAst = new ScryAst(t);
           //Under code, add to top, so order is reversed
+          scryAst.createParentTraceDeclare(path);
           // Add Zone.root initialization code if not initialized
           scryAst.createZoneRootInitialization(path);
           //Add Zone.js initialization code
@@ -58,6 +71,49 @@ function scryBabelPlugin(
         }
       },
     },
+
+    FunctionDeclaration: (
+      path: babel.NodePath<babel.types.FunctionDeclaration>
+    ) => {
+      try {
+        new ScryAst(t).createParentTraceDeclare(path);
+      } catch (error) {
+        console.error("FunctionDeclaration error:", error);
+      }
+    },
+    FunctionExpression: (
+      path: babel.NodePath<babel.types.FunctionExpression>
+    ) => {
+      try {
+        new ScryAst(t).createParentTraceDeclare(path);
+      } catch (error) {
+        console.error("FunctionExpression error:", error);
+      }
+    },
+    ArrowFunctionExpression: (
+      path: babel.NodePath<babel.types.ArrowFunctionExpression>
+    ) => {
+      try {
+        new ScryAst(t).createParentTraceDeclare(path);
+      } catch (error) {
+        console.error("ArrowFunctionExpression error:", error);
+      }
+    },
+    ClassMethod: (path: babel.NodePath<babel.types.ClassMethod>) => {
+      try {
+        new ScryAst(t).createParentTraceDeclare(path);
+      } catch (error) {
+        console.error("ClassMethod error:", error);
+      }
+    },
+    ObjectMethod: (path: babel.NodePath<babel.types.ObjectMethod>) => {
+      try {
+        new ScryAst(t).createParentTraceDeclare(path);
+      } catch (error) {
+        console.error("ObjectMethod error:", error);
+      }
+    },
+
     NewExpression: {
       exit(
         path: babel.NodePath<babel.types.NewExpression>,
@@ -102,6 +158,10 @@ function scryBabelPlugin(
     const duplicated = scryChecker.isDuplicateFunction(path);
     //Check if the function is a JSX function
     const jsx = scryChecker.isJSX(path);
+    //Check if the function is a react refresh registration
+    const refreshReg = t.isIdentifier(path.node.callee, {
+      name: "$RefreshReg$",
+    });
     //Check if the function is a Zone.root[ACTIVE_TRACE_ID_SET] = new Set() initialization
     const zoneRootInitialization = scryChecker.isZoneRootInitialization(path);
     //Check if the function is a trace zone initialization
@@ -114,17 +174,21 @@ function scryBabelPlugin(
     const nodejsProcessFunction = scryChecker.isNodejsProcessFunction(path);
     //Check if the function is a "require" call
     const requireCall = t.isIdentifier(path.node.callee, { name: "require" });
+    //Check if the function is a tracer method(Tracer.start() or Tracer.end())
+    const tracerMethod = scryChecker.isTracerMethod(path);
 
     //Skip conditions
     const skips = [
+      !developmentMode,
       zoneRootInitialization,
       traceZoneInitialization,
       reactDOMCall,
       requireCall,
-      !developmentMode,
       duplicated,
       jsx,
       nodejsProcessFunction,
+      refreshReg,
+      tracerMethod,
     ];
     //Skip if any skip is true
     if (skips.some((skip) => skip)) {
@@ -132,6 +196,10 @@ function scryBabelPlugin(
       return;
     }
 
+    //Check if the function is an await expression
+    const awaitExpression = path.findParent((p) => p.isAwaitExpression())
+      ? true
+      : false;
     //Extract isChained function
     const chained = scryChecker.isChainedFunction(path);
     //Extract function name
@@ -139,18 +207,19 @@ function scryBabelPlugin(
     //Generate new node (with marker comment)
     const newNode = t.callExpression(
       //Arrow function expression("this" must not be reset)
-      t.functionExpression(
-        null,
+      t.arrowFunctionExpression(
         [],
         t.blockStatement([
           //Create marker variable
           scryAst.createMarkerVariable(),
           //Create traceId
           scryAst.createTraceId(),
+          //Create parent traceId optional updater
+          scryAst.createParentTraceIdOptionalUpdater(path),
           //Extract code from location
           scryAst.createCodeExtractor(),
           //Extract parent traceId (With zone.js scope)
-          scryAst.createParentTraceIdFromGlobalParentTraceId(),
+          // scryAst.createParentTraceIdFromGlobalParentTraceId(),
           //Generate 'enter' event
           t.expressionStatement(
             scryAst.emitTraceEvent(
@@ -163,10 +232,13 @@ function scryBabelPlugin(
           ),
           //Create returnValue
           scryAst.createReturnValue(),
-          //Set current traceId as parent traceId(With zone.js scope)
+          //Create new trace-zone based on current trace-id forked with parent traceId
           scryAst.craeteGlobalParentTraceIdSetterWithTraceId(),
+          //Create Declare traceZone
+          scryAst.createDeclareTraceZoneWithTraceId(),
           //Add active traceId to Zone.root[ACTIVE_TRACE_ID_SET]
           scryAst.createActiveTraceIdAdder(),
+          // Remove active traceId from Zone.root[ACTIVE_TRACE_ID_SET]
           //Update returnValue with origin execution(With zone.js scope)
           scryAst.craeteReturnValueUpdaterWithOriginExecution(path),
           //Generate 'exit' event
@@ -181,15 +253,18 @@ function scryBabelPlugin(
           ),
           //Return origin function result
           t.returnStatement(t.identifier(ScryAstVariable.returnValue)),
-        ])
+        ]),
+        awaitExpression
       ),
       []
     );
     //Add marker comment
     //(hmm. it's duplicated with variable marker, but it's mark checker. variable marker is just flag for annonimous function.)
+
     newNode.leadingComments = [
       { type: "CommentBlock", value: ` ${TRACE_MARKER} ` },
     ];
+
     path.replaceWith(newNode);
     path.skip();
   }
