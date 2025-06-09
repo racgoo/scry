@@ -183,13 +183,9 @@ Tracer.end();
 
 Further improvements are underway to better validate and track function parameters and return values, especially for complex nodes such as `BinaryExpression`, `CallExpression`, and others.
 
-#### Async Function Support(~ing. comming soon:)
-Tracing for `asynchronous functions` is not yet implemented. Development is currently in progress.
+#### Async Function Support(Experimental Support)
 
-
-- Promise support. but.. don't support async/await( just use .then callback )
-- async/await will be supported soon!! :)
-
+All done!. but it needs some feedback:)
 
 #### Improved error messaging
 
@@ -199,8 +195,8 @@ error handling and clearer error messages are currently under development.😅
 
 ### 🔧 Bugs [2025-06-8]
 
-##### Function, Class source code extracting is not working..
-##### Async/Await is not working...
+##### Function, Class source code extracting is not working..(I)
+##### Async/Await is not working...(Fix! haha it works! 2025-06-10)
 ##### Detail page in UI System is not working...
 
 #### Don't worry about them~ I'll fix it :)
