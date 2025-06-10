@@ -202,7 +202,14 @@ error handling and clearer error messages are currently under development.😅
 #### Don't worry about them~ I'll fix it :)
 believe me!
 
+---
 
+### Third Party Licenses
+
+This project uses the following third-party packages:
+
+- [Day.js](https://github.com/iamkun/dayjs) - MIT License
+- [Zone.js](https://github.com/angular/angular) - MIT License
 
 ---
 
