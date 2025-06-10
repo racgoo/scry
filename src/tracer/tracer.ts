@@ -1,12 +1,12 @@
 import "zone.js";
-import { Output } from "../utils/output.js";
+import dayjs from "dayjs";
 import Format from "./format.js";
+import { Output } from "../utils/output.js";
+import { Environment } from "../utils/enviroment.js";
 import {
   ACTIVE_TRACE_ID_SET,
   TRACE_EVENT_NAME,
 } from "../babel/scry.constant.js";
-import { Environment } from "../utils/enviroment.js";
-import dayjs from "dayjs";
 
 //Tracer class. for single instance.
 class Tracer {
@@ -55,17 +55,13 @@ class Tracer {
       return;
     }
     //Wait for all return values to be resolved
-    //this logic is wait for async context done(zone.js hasTask event driven)
+    //this logic is wait for async context done(await promise context with 'then' trigger)
     while (this.isTracing) {
       await new Promise((resolve) => setTimeout(resolve, 10));
       if (this.isAllContextDone()) break;
     }
-
     //Make trace tree(hierarchical tree structure by call)
     const traceNodes: TraceNode[] = this.makeTraceNodes(this.details);
-
-    //Remove last node. it's not a trace node, it's Trace.end() command.. :( need refactor
-    // traceNodes.pop();
     //Update duration
     this.duration = dayjs().diff(this.startTime, "ms");
     //Remove event listener according to the execution environment
@@ -76,14 +72,12 @@ class Tracer {
       //Browser use globalThis event
       globalThis.removeEventListener(TRACE_EVENT_NAME, this.boundOnTrace);
     }
-
     //Generate html root for Display UI(HTML)
     const htmlRoot = Format.generateHtmlRoot(
       traceNodes,
       this.startTime,
       this.duration
     );
-
     //Use display ui for Browser(Nodejs use file system)
     if (Environment.isNodeJS()) {
       import("fs").then(async (fs) => {
@@ -119,7 +113,6 @@ class Tracer {
 
   //OnTrace function. called when trace event is emitted.
   private onTrace(event: unknown) {
-    // console.log("onTrace", (event as CustomEvent).detail!.traceId);
     // Nodejs use event directly, browser use custom event with detail
     const detail = Environment.isNodeJS()
       ? event
@@ -137,7 +130,6 @@ class Tracer {
     const traceNodes: TraceNode[] = [];
     let nodeMap = new Map<number, TraceNode>();
     const enterDetails = details.filter((d) => d.type === "enter");
-    //Extract entry index for each trace id
     const enterIndexMap = new Map<number, number>();
     for (let i = 0; i < enterDetails.length; i++) {
       enterIndexMap.set(enterDetails[i].traceId, i);
@@ -170,7 +162,7 @@ class Tracer {
         }
       }
     }
-    //Reverse chained nodes order
+    //Reverse chained nodes order(babel plugin transform code with wrapping. so reverse order is needed)
     nodeMap = this.reverseChainedNodes(details, nodeMap);
     //Setup parent-child relation
     for (const node of nodeMap.values()) {
@@ -186,59 +178,26 @@ class Tracer {
         }
       }
     }
-
     return traceNodes;
   }
 
+  //Check if all context is done(await promise context with 'then' trigger)
   private isAllContextDone() {
+    //Zone.root has ACTIVE_TRACE_ID_SET as Active trace id set.
     const { [ACTIVE_TRACE_ID_SET]: activeTraceIdSet } =
       Zone.root as unknown as {
         [ACTIVE_TRACE_ID_SET]: Set<number>;
       };
+    //Return active context is not exist
     return activeTraceIdSet.size === 0;
   }
 
+  //Init context history(reset Zone.root.ACTIVE_TRACE_ID_SET )
   private initContextHistory() {
     (Zone.root as unknown as { [ACTIVE_TRACE_ID_SET]: Set<number> })[
       ACTIVE_TRACE_ID_SET
     ] = new Set();
   }
-  //Deprecated
-  //Make display result(for console)
-  // private makeDetailResult(
-  //   traceNodes: TraceNode[],
-  //   depth = 0
-  // ): DisplayDetailResult[] {
-  //   const result: DisplayDetailResult[] = [];
-  //   //Iterate traceNodes(they are root nodes)
-  //   for (const node of traceNodes) {
-  //     //Indent and prefix for display
-  //     // const indent = "ㅤㅤ".repeat(depth);
-  //     const indent = "ㅤ";
-  //     // const prefix = depth > 0 ? "⤷ " : "";
-  //     const prefix = "ㅤ";
-  //     //Generate html content
-  //     const htmlContent = Format.generateHtmlContent(node);
-  //     //Generate args string
-  //     const args = node.args.map((arg) => Format.parseJson(arg)).join(", ");
-  //     //Save to result
-  //     result.push({
-  //       //Title text
-  //       title: `${indent}${prefix}${node.name}(${args}) ${
-  //         node.errored ? "⚠️Error⚠️" : ""
-  //       } [${node.classCode ? "method" : "function"}]`,
-  //       //HTM: detail page
-  //       html: htmlContent,
-  //       depth: depth,
-  //       chainInfo: node.chainInfo,
-  //     });
-  //     //Recursive call for children
-  //     if (node.children?.length > 0) {
-  //       result.push(...this.makeDetailResult(node.children, depth + 1));
-  //     }
-  //   }
-  //   return result;
-  // }
 
   //Reverse chained nodes order
   //(because, babel plugin transform code with wrapping. so reverse order is needed)
@@ -247,23 +206,29 @@ class Tracer {
     nodeMap: Map<number, TraceNode>
   ) {
     const reversedChains: number[][] = [];
+    //Only one chain list(ex. .map().reduce().then() as [1,2,3])
     const currentReversedChainTraceIds: number[] = [];
+    //Accumulating flag
     let accumulating = false;
     nodeDetails.some((detail) => {
       const { chained, type } = detail;
+      //If type is exit, return false(not accumulate)
       if (type === "exit") {
         return false;
       }
+      //If chained is true and accumulating is false, start accumulating
       if (chained && !accumulating) {
-        //start
+        //Start accumulating
         accumulating = true;
       }
       if (accumulating) {
-        //accumulate
+        //Accumulate
         currentReversedChainTraceIds.push(detail.traceId);
       }
+      //If chained is false and accumulating is true, end accumulating
+      //Fist chain function's chained is false. so, it's not a chained function. just start function.
       if (!chained && accumulating) {
-        //end
+        //End accumulating
         accumulating = false;
         reversedChains.push(currentReversedChainTraceIds.slice());
         currentReversedChainTraceIds.length = 0;
@@ -274,22 +239,25 @@ class Tracer {
       const rootParentTraceId = nodeMap.get(
         reversedChainTraceIds[0]
       )?.parentTraceId;
+      //First chain function's trace id
       const chainRootTraceId = nodeMap.get(
         reversedChainTraceIds[reversedChainTraceIds.length - 1]
       )!.traceId;
-      //Setup parent trace id and chain info
+      //Setup parent trace id as root parent id,and add chain info(for display)
       for (let i = 0; i < reversedChainTraceIds.length; i++) {
-        const traceId = reversedChainTraceIds[i];
-        const currentNode = nodeMap.get(traceId)!;
+        const currentNode = nodeMap.get(reversedChainTraceIds[i])!;
         currentNode.parentTraceId = rootParentTraceId;
         currentNode.chainInfo = {
+          //Chain start trace id
           startTraceId: chainRootTraceId,
+          //Chain index
           index: reversedChainTraceIds.length - i,
         };
       }
     });
     //Create new node map, because, Map is ordered by insertion order
     const newNodeMap = new Map<number, TraceNode>();
+    //Sort and update newNodeMap
     Array.from(nodeMap.values())
       //Sort by trace id
       .sort((a, b) => {
@@ -312,7 +280,6 @@ class Tracer {
       });
     return newNodeMap;
   }
-
   //Reset settings(Trace is single instance but, v8(nodejs,browser) use signle thread, there is no side effect)
   private resetSettings() {
     this.isTracing = false;

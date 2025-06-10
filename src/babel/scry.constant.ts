@@ -3,17 +3,17 @@ export const TRACE_MARKER = "__SCRY_MARK__";
 //Marker for argument
 export const ARGUMENT_MARKER = "__SCRY_ARG_MARK__";
 //Event name for trace
-export const TRACE_EVENT_NAME = "scry:trace";
+export const TRACE_EVENT_NAME = "__SCRY_TRACE_EVENT_NAME__";
 //Name for anonymous function
-export const ANONYMOUS_FUNCTION_NAME = "AnonymousFunction";
+export const ANONYMOUS_FUNCTION_NAME = "__ANONYMOUS_FUNCTION__";
 //Name for unknown location
-export const UNKNOWN_LOCATION = "UnknownLocation";
+export const UNKNOWN_LOCATION = "__UNKNOWN_LOCATION__";
 //Name for development mode
 export const DEVELOPMENT_MODE = "development";
 //Name for trace zone
-export const TRACE_ZONE = "TraceZone";
+export const TRACE_ZONE = "__TRACE_ZONE__";
 //Name for active trace id set(with zone.js)
-export const ACTIVE_TRACE_ID_SET = "ActiveTraceIdSet";
+export const ACTIVE_TRACE_ID_SET = "__ACTIVE_TRACE_ID_SET__";
 //Marker for parent trace id declare
 export const PARENT_TRACE_ID_MARKER = "__PARENT_TRACE_ID_MARK__";
 

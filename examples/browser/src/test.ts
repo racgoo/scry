@@ -1,9 +1,4 @@
-//ESM
-import { Tracer } from "@racgoo/scry";
-//CJS
-// const { Tracer } = require("@racgoo/scry");
-
-async function asyncTest1(flag) {
+async function asyncTest1(flag: string) {
   console.log("asyncTest", flag);
   await asyncTest2(flag + ":await1");
   asyncTest2(flag + ":then1").then((res) => {
@@ -14,11 +9,11 @@ async function asyncTest1(flag) {
   return flag + "bye..";
 }
 
-async function asyncTest2(flag) {
+async function asyncTest2(flag: string) {
   return new Promise((resolve) => setTimeout(() => resolve(flag), 1000));
 }
 
-async function asyncTest() {
+export async function asyncTest() {
   asyncTest1("then1").then((res) => {
     console.log(res);
   });
@@ -36,12 +31,7 @@ const syncTest2 = () => {
   console.log("syncTest2");
 };
 
-const syncTest = () => {
+export const syncTest = () => {
   syncTest1();
   syncTest2();
 };
-
-Tracer.start();
-asyncTest();
-syncTest();
-Tracer.end();

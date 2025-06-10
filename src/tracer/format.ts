@@ -8,6 +8,18 @@ class Format {
     startTime: dayjs.Dayjs,
     duration: number
   ): string {
+    // items 배열을 평탄화하여 모든 노드를 포함하도록 수정
+    const flattenNodes = (nodes: TraceNode[]): TraceNode[] => {
+      let result: TraceNode[] = [];
+      nodes.forEach((node) => {
+        result.push(node);
+        if (node.children.length > 0) {
+          result = result.concat(flattenNodes(node.children));
+        }
+      });
+      return result;
+    };
+
     return `
       <!DOCTYPE html>
       <html>
@@ -85,7 +97,7 @@ class Format {
               background: linear-gradient(135deg, var(--card-bg), rgba(30, 41, 59, 0.8));
               border-radius: 16px;
               padding: 1.5rem;
-              margin-bottom: 2rem;
+              margin-bottom: 1rem;
               border: 1px solid rgba(255, 255, 255, 0.1);
               box-shadow: 
                 0 8px 32px rgba(0, 0, 0, 0.2),
@@ -143,7 +155,7 @@ class Format {
             .trace-list {
               display: flex;
               flex-direction: column;
-              gap: 1rem;
+              gap: 0px;
               padding: 1rem;
               margin-bottom: 1rem;
             }
@@ -469,10 +481,6 @@ class Format {
               z-index: 1;
             }
 
-            .chain-group .trace-item {
-              margin-bottom: 0.25rem;
-            }
-
             .chain-group .trace-item:last-child {
               margin-bottom: 0;
             }
@@ -508,14 +516,14 @@ class Format {
 
             /* Chained 라벨 추가 */
             .chain-group::before {
-              content: 'Chained';
+              content: 'Chained🔗';
               position: absolute;
-              top: -0.75rem;
-              left: 1rem;
+              top: -0.5rem;
+              left: 0px;
               background: linear-gradient(135deg, var(--primary-dark), var(--accent-color));
               padding: 4px 0px 0px 0px;
               border-radius: 6px;
-              font-size: 0.75rem;
+              font-size: 0.5rem;
               font-weight: 500;
               color: var(--text-primary);
               letter-spacing: 0.5px;
@@ -593,15 +601,22 @@ class Format {
                     <path d="M7.5 7.5v9h4.5v-9"/>
                     <path d="M16.5 7.5v9"/>
                   </svg>
-                  NPM Package
+                  NPM
                 </a>
+
+                <button class="header-link" onclick="downloadHtml()">                
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <path d="M7 10l5 5 5-5"/>
+                    <path d="M12 15V3"/>
+                  </svg>
+                  Download HTML
+                </button>
               </div>
             </div>
-
             <div>
-            ${this.generateTraceList(traceNodes)}
+              ${this.generateTraceList(traceNodes)}
             </div>
-            
           </div>
 
           <div id="modal" class="modal" onclick="closeModal(event)">
@@ -616,14 +631,140 @@ class Format {
           </div>
 
           <script>
-            const items = ${this.parseJson(traceNodes)};
+            const items = ${JSON.stringify(
+              flattenNodes(traceNodes),
+              (key, value) => {
+                if (key === "parent") return undefined;
+                if (key === "children") return []; // 순환 참조 방지
+                return value;
+              }
+            )};
+            
+            function downloadHtml() {
+              const html = document.documentElement.outerHTML;
+              const blob = new Blob([html], { type: "text/html" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = "scry-trace.html";
+              a.click();
+              URL.revokeObjectURL(url);
+            }
+
+            function generateHtmlContent(node) {
+              const callType = node.classCode ? "method" : "function";
+              return \`
+                <div class="trace-info">
+                  <div class="detail-header">
+                    <div class="detail-title">
+                      <h1 class="function-name">\${node.name}</h1>
+                      <div class="function-meta">
+                        <div class="meta-badges">
+                          <span class="badge call-type">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M20 12V8H6a2 2 0 100 4h14v-4M20 12v4H6a2 2 0 110-4h14v4" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            \${callType}
+                          </span>
+                          <span class="badge status-badge \${node.errored ? "error" : "success"}">
+                            \${node.errored 
+                              ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" stroke-width="2"/><path d="M12 8v4M12 16h.01" stroke-width="2"/></svg>'
+                              : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" stroke-width="2"/><path d="M8 12l2 2 4-4" stroke-width="2"/></svg>'
+                            }
+                            \${node.errored ? "Failed" : "Success"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="content">
+                    <div class="section" style="--animation-order: 1">
+                      <div class="section-header">
+                        <div class="section-title">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M8 3H7a2 2 0 00-2 2v5a2 2 0 01-2 2 2 2 0 012 2v5c0 1.1.9 2 2 2h1M16 3h1a2 2 0 012 2v5a2 2 0 002 2 2 2 0 00-2 2v5a2 2 0 01-2 2h-1" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          \${callType === "method" ? "Method Definition" : "Function Definition"}
+                        </div>
+                      </div>
+                      <div class="section-content">
+                        <pre><code class="language-javascript">\${node.classCode ? node.methodCode : (node.functionCode || "Source code not available")}</code></pre>
+                      </div>
+                    </div>
+                    
+                    \${node.classCode ? \`
+                      <div class="section" style="--animation-order: 2">
+                        <div class="section-header">
+                          <div class="section-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            Class Definition
+                          </div>
+                        </div>
+                        <div class="section-content">
+                          <pre><code class="language-javascript">\${node.classCode}</code></pre>
+                        </div>
+                      </div>
+                    \` : ""}
+                    
+                    <div class="section" style="--animation-order: 3">
+                      <div class="section-header">
+                        <div class="section-title">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/>
+                            <circle cx="12" cy="10" r="3" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          Arguments
+                        </div>
+                      </div>
+                      <div class="section-content">
+                        <pre><code class="language-json">\${JSON.stringify(node.args, null, 2)}</code></pre>
+                      </div>
+                    </div>
+                    
+                    <div class="section" style="--animation-order: 4">
+                      <div class="section-header">
+                        <div class="section-title">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          Return Value
+                        </div>
+                      </div>
+                      <div class="section-content">
+                        <pre><code class="language-javascript">\${JSON.stringify(node.returnValue, null, 2)}</code></pre>
+                      </div>
+                    </div>
+                    
+                    <div class="section" style="--animation-order: 5">
+                      <div class="section-header">
+                        <div class="section-title">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/>
+                            <circle cx="12" cy="10" r="3" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          Source Location
+                        </div>
+                      </div>
+                      <div class="section-content source-content">
+                        <span class="source-badge">\${node.source}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              \`;
+            }
             
             function showModal(index) {
               const modal = document.getElementById('modal');
               const modalContent = document.getElementById('modal-content');
-              modalContent.innerHTML = items[index].html;
+              if (items[index]) {
+                modalContent.innerHTML = generateHtmlContent(items[index]);
               modal.classList.add('visible');
               hljs.highlightAll();
+              }
             }
 
             function closeModal(event) {
@@ -648,7 +789,7 @@ class Format {
               const childrenContainer = document.querySelector('[data-parent="' + traceId + '"]');
               
               if (childrenContainer) {
-                button.classList.toggle('collapsed');
+              button.classList.toggle('collapsed');
                 childrenContainer.classList.toggle('hidden');
               }
             }
@@ -659,13 +800,40 @@ class Format {
   }
 
   static generateTraceList(traceNodes: TraceNode[]): string {
-    // 재귀적으로 트레이스 노드를 HTML로 변환하는 함수
-    const renderNode = (node: TraceNode, index: number): string => {
+    let globalIndex = 0;
+
+    // 체인 그룹을 추적하기 위한 맵
+    const chainGroups = new Map<number, TraceNode[]>();
+
+    // 먼저 체인 그룹을 구성
+    const buildChainGroups = (nodes: TraceNode[]) => {
+      nodes.forEach((node) => {
+        if (node.chainInfo?.startTraceId) {
+          const groupId = node.chainInfo.startTraceId;
+          if (!chainGroups.has(groupId)) {
+            chainGroups.set(groupId, []);
+          }
+          chainGroups.get(groupId)!.push(node);
+        }
+        if (node.children.length > 0) {
+          buildChainGroups(node.children);
+        }
+      });
+    };
+
+    buildChainGroups(traceNodes);
+
+    const renderNode = (node: TraceNode): string => {
       let html = "";
+      const currentIndex = globalIndex++;
 
       // 체인 그룹 시작
       if (node.chainInfo?.startTraceId) {
-        if (node.chainInfo.startTraceId === node.traceId) {
+        const groupId = node.chainInfo.startTraceId;
+        const group = chainGroups.get(groupId)!;
+
+        // 그룹의 첫 번째 노드일 때만 chain-group div 시작
+        if (group[0] === node) {
           html += '<div class="chain-group">';
         }
       }
@@ -686,7 +854,7 @@ class Format {
                 : ""
             }
           </div>
-          <div class="item-content" onclick="showModal(${index})">
+          <div class="item-content" onclick="showModal(${currentIndex})">
             <div class="trace-icon">
               <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
@@ -700,37 +868,30 @@ class Format {
       // 자식 노드들 렌더링
       if (node.children.length > 0) {
         html += `<div class="children" data-parent="${node.traceId}">`;
-        node.children.forEach((child, childIndex) => {
-          html += renderNode(child, index + childIndex + 1);
+        node.children.forEach((child) => {
+          html += renderNode(child);
         });
         html += "</div>";
       }
 
       // 체인 그룹 종료
-      const nextNode = traceNodes[index + 1];
-      if (
-        node.chainInfo?.startTraceId &&
-        (!nextNode ||
-          nextNode.chainInfo?.startTraceId !== node.chainInfo.startTraceId)
-      ) {
-        html += "</div>";
+      if (node.chainInfo?.startTraceId) {
+        const groupId = node.chainInfo.startTraceId;
+        const group = chainGroups.get(groupId)!;
+
+        // 그룹의 마지막 노드일 때만 chain-group div 종료
+        if (group[group.length - 1] === node) {
+          html += "</div>";
+        }
       }
 
       return html;
     };
 
-    // 각 최상위 노드를 개별적인 trace-list div로 감싸기
-    return traceNodes
+    return `<div class="trace-list">${traceNodes
       .filter((node) => !node.parent)
-      .map(
-        (node, index) => renderNode(node, index)
-        //   `
-        //   <div class="trace-list">
-        //     ${renderNode(node, index)}
-        //   </div>
-        // `
-      )
-      .join("");
+      .map((node) => renderNode(node))
+      .join("")}</div>`;
   }
 
   //Generate execution detail html
