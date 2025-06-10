@@ -1,9 +1,9 @@
-# 🔍 Scry
+# 🔍 Scry(ver. Beta)
 
-# **JavaScript/TypeScript execution flow tracking debugging tools**
+# **JavaScript/TypeScript execution flow tracker**
 
 <div align="center">
-  <img src="https://img.shields.io/badge/version-0.0.38-blue.svg" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-0.0.40-blue.svg" alt="Version"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/>
 </div>
@@ -65,8 +65,7 @@ In Node.js, trace results are saved as `HTML` files under the scry/report folder
 
 -  #### Report (WebUI)
 
-  
-  <img width="1414" alt="image" src="https://github.com/user-attachments/assets/8b764af3-4f87-4c8b-ab32-98705ac0fd47" />
+<img width="1405" alt="image" src="https://github.com/user-attachments/assets/154a7b80-c79f-4cff-b76c-a0c1a6f71f51" />
 
 
 
@@ -173,8 +172,6 @@ bar(5);
 Tracer.end();
 ```
 
-✨ Files inside node_modules are not traced. If you need this feature, feel free to contact us. ✨
-
 ---
 
 ### 🔧 Future Work
@@ -193,11 +190,9 @@ error handling and clearer error messages are currently under development.😅
 
 ---
 
-### 🔧 Bugs [2025-06-8]
-
-##### Function, Class source code extracting is not working..(I)
-##### Async/Await is not working...(Fix! haha it works! 2025-06-10)
-##### Detail page in UI System is not working...
+### 🔧 Bugs 
+##### Function, Class source code extracting is not working..(fixing)
+##### Trace.start() ~~ Trace.end() pattern cannot be twice in runtime..(fixing)
 
 #### Don't worry about them~ I'll fix it :)
 believe me!
@@ -215,7 +210,7 @@ This project uses the following third-party packages:
 
 ### Contact
 
-###### Have questions, suggestions, or want to contribute?
+###### Have questions, suggestions, bugs, or want to contribute?
 
 ###### Feel free to reach out at
 
