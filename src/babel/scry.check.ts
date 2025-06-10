@@ -1,12 +1,12 @@
+import * as babel from "@babel/core";
 import { Environment } from "../utils/enviroment.js";
+import Extractor from "../utils/extractor.js";
 import {
   ACTIVE_TRACE_ID_SET,
   DEVELOPMENT_MODE,
   TRACE_MARKER,
   TRACE_ZONE,
 } from "./scry.constant.js";
-import Extractor from "../utils/extractor.js";
-import * as babel from "@babel/core";
 
 //Checkers for scry babel plugin
 class ScryChecker {
@@ -14,6 +14,7 @@ class ScryChecker {
   constructor(t: typeof babel.types) {
     this.t = t;
   }
+  //Check if the file is a ESM file(Deprecated, because, babel plugin can't clearly detect ESM file)
   static isESM(state: babel.PluginPass): boolean {
     const sourceType = state.file?.opts.parserOpts?.sourceType;
     if (sourceType === "script") {
@@ -37,7 +38,6 @@ class ScryChecker {
   ): boolean {
     const callee = node.callee;
     if (!this.t.isMemberExpression(callee)) return false;
-
     return (
       this.t.isIdentifier(callee.object) &&
       (callee.object.name === "ReactDOM" ||
@@ -47,6 +47,7 @@ class ScryChecker {
     );
   }
 
+  //Check if the function is a Tracer method
   public isTracerMethod(
     path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
   ) {
@@ -60,40 +61,8 @@ class ScryChecker {
     );
   }
 
-  public hasZoneRootActiveTraceSetInit(body: babel.types.Statement[]) {
-    return body.some((stmt) => {
-      if (!this.t.isExpressionStatement(stmt)) return false;
-      const expr = stmt.expression;
-      if (!this.t.isAssignmentExpression(expr)) return false;
-      if (expr.operator !== "=") return false;
-
-      const left = expr.left;
-      if (
-        this.t.isMemberExpression(left) &&
-        this.t.isMemberExpression(left.object) &&
-        this.t.isIdentifier(left.object.object, { name: "Zone" }) &&
-        this.t.isIdentifier(left.object.property, { name: "root" }) &&
-        this.t.isStringLiteral(left.property, {
-          value: ACTIVE_TRACE_ID_SET,
-        }) &&
-        left.computed
-      ) {
-        const right = expr.right;
-        if (
-          this.t.isNewExpression(right) &&
-          this.t.isIdentifier(right.callee, { name: "Set" }) &&
-          right.arguments.length === 0
-        ) {
-          return true;
-        }
-      }
-
-      return false;
-    });
-  }
-
   //Check if the function is a Zone.root[ACTIVE_TRACE_ID_SET] = new Set() initialization
-  public isZoneRootInitialization(
+  public isZoneRootActiveTraceSetInit(
     path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
   ) {
     if (this.t.isNewExpression(path.node)) {
@@ -120,8 +89,9 @@ class ScryChecker {
     return false;
   }
 
-  //Check if the function is a TraceZone initialization or zone.js code
-  public isTraceZoneInitialization(node: babel.types.Node): boolean {
+  //Check if the function is a default TraceZone initialization on top level of file
+  //'DefaultTraceZone' works when TraceZone is not initialized in function scope
+  public isDefaultTraceZoneInitialization(node: babel.types.Node): boolean {
     if (!this.t.isCallExpression(node)) return false;
     const callee = node.callee;
     if (!this.t.isMemberExpression(callee)) return false;
@@ -154,7 +124,7 @@ class ScryChecker {
     return false;
   }
 
-  //Check if the file is a node module
+  //Check if the file is in node_modules
   static isNodeModule(state: babel.PluginPass) {
     const filePath = state?.filename || "";
     if (filePath.includes("node_modules")) {
@@ -193,8 +163,8 @@ class ScryChecker {
     );
   }
 
-  //
-  public isNodejsProcessFunction(
+  //Check if the function is a nodejs process method
+  public isNodejsProcessMethod(
     path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
   ) {
     return (

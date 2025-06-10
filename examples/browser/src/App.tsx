@@ -2,40 +2,30 @@ import reactLogo from "./assets/react.svg";
 import viteLogo from "/vite.svg";
 import "./App.css";
 import { Tracer } from "@racgoo/scry";
-
-function asyncTest2(flag: string) {
-  return new Promise((resolve) => setTimeout(() => resolve(flag), 1000));
-}
-async function asyncTest1(flag: string) {
-  asyncTest2(flag + ":third").then((res) => {
-    console.log(res);
-  });
-  return "hi";
-}
+import { asyncTest, syncTest } from "./test";
 
 function App() {
-  async function test() {
+  function handleClick() {
     Tracer.start();
-    await asyncTest1("test");
-    asyncTest2("test" + ":third").then((res) => {
-      console.log(res);
-    });
-    await asyncTest1("test");
+    asyncTest();
+    syncTest();
     Tracer.end();
   }
   return (
     <>
-      <div>
+      <div style={{ display: "flex", gap: "10px" }}>
         <a href="https://vite.dev" target="_blank">
           <img src={viteLogo} className="logo" alt="Vite logo" />
+          <p>{"Sorry Vite Icon :)"}</p>
         </a>
         <a href="https://react.dev" target="_blank">
           <img src={reactLogo} className="logo react" alt="React logo" />
+          <p>{"Sorry React Icon :)"}</p>
         </a>
       </div>
-      <h1>Vite + React</h1>
+      <h1>!!Scry Test!!</h1>
       <div className="card">
-        <button onClick={test}>Test Click Me</button>
+        <button onClick={handleClick}>Test Click Me</button>
       </div>
     </>
   );

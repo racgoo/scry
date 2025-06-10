@@ -2,7 +2,7 @@
   "name": "browser-example",
   "private": true,
   "version": "0.0.0",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "start": "npm i && npm run dev",
     "dev": "NODE_ENV=development vite",
