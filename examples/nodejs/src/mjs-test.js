@@ -1,5 +1,4 @@
-async function asyncTest1(flag: string) {
-  console.log("asyncTest", flag);
+async function asyncTest1(flag) {
   await asyncTest2(flag + ":await1");
   asyncTest2(flag + ":then1").then((res) => {
     console.log(res);
@@ -9,7 +8,7 @@ async function asyncTest1(flag: string) {
   return flag + "bye..";
 }
 
-async function asyncTest2(flag: string) {
+async function asyncTest2(flag) {
   return new Promise((resolve) => setTimeout(() => resolve(flag), 1000));
 }
 

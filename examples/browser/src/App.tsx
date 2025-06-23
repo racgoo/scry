@@ -2,15 +2,17 @@ import reactLogo from "./assets/react.svg";
 import viteLogo from "/vite.svg";
 import "./App.css";
 import { Tracer } from "@racgoo/scry";
-import { asyncTest, syncTest } from "./test";
+import { asyncTest, classTest, syncTest } from "./test";
 
 function App() {
   function handleClick() {
     Tracer.start();
-    asyncTest();
     syncTest();
+    asyncTest();
+    classTest();
     Tracer.end();
   }
+
   return (
     <>
       <div style={{ display: "flex", gap: "10px" }}>

@@ -1,5 +1,4 @@
-async function asyncTest1(flag: string) {
-  console.log("asyncTest", flag);
+async function asyncTest1(flag) {
   await asyncTest2(flag + ":await1");
   asyncTest2(flag + ":then1").then((res) => {
     console.log(res);
@@ -9,11 +8,11 @@ async function asyncTest1(flag: string) {
   return flag + "bye..";
 }
 
-async function asyncTest2(flag: string) {
+async function asyncTest2(flag) {
   return new Promise((resolve) => setTimeout(() => resolve(flag), 1000));
 }
 
-export async function asyncTest() {
+async function asyncTest() {
   asyncTest1("then1").then((res) => {
     console.log(res);
   });
@@ -31,7 +30,7 @@ const syncTest2 = () => {
   console.log("syncTest2");
 };
 
-export const syncTest = () => {
+const syncTest = () => {
   syncTest1();
   syncTest2();
 };
@@ -43,7 +42,13 @@ class TestClass {
   }
 }
 
-export const classTest = () => {
+const classTest = () => {
   const testInstance = new TestClass();
   testInstance.test();
+};
+
+module.exports = {
+  asyncTest,
+  syncTest,
+  classTest,
 };
