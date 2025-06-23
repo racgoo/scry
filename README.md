@@ -3,7 +3,7 @@
 # **JavaScript/TypeScript execution flow tracker**
 
 <div align="center">
-  <img src="https://img.shields.io/badge/version-0.0.40-blue.svg" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-0.0.41-blue.svg" alt="Version"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/>
 </div>
@@ -191,7 +191,7 @@ error handling and clearer error messages are currently under development.😅
 ---
 
 ### 🔧 Bugs 
-##### Function, Class source code extracting is not working..(fixing)
+##### Function, Class source code extracting is not working..(fixed)
 ##### Trace.start() ~~ Trace.end() pattern cannot be twice in runtime..(fixing)
 
 #### Don't worry about them~ I'll fix it :)
