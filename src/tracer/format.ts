@@ -1,7 +1,25 @@
+import { Environment } from "../utils/enviroment.js";
 import dayjs from "dayjs";
 
 //data formatter for trace result(Made by claude:))
 class Format {
+  static safeStringify(obj: any, space = 2) {
+    const seen = new WeakSet();
+    return JSON.stringify(
+      obj,
+      (key, value) => {
+        if (typeof value === "object" && value !== null) {
+          if (seen.has(value)) return "[Circular]";
+          seen.add(value);
+        }
+        if (!Environment.isNodeJS() && value instanceof HTMLElement)
+          return "[DOM Element]";
+        return value;
+      },
+      space
+    );
+  }
+
   //Generate html root for trace result(zip all trace result)
   static generateHtmlRoot(
     traceNodes: TraceNode[],
@@ -635,7 +653,6 @@ class Format {
               flattenNodes(traceNodes),
               (key, value) => {
                 if (key === "parent") return undefined;
-                if (key === "children") return []; // 순환 참조 방지
                 return value;
               }
             )};
@@ -689,7 +706,7 @@ class Format {
                         </div>
                       </div>
                       <div class="section-content">
-                        <pre><code class="language-javascript">\${node.classCode ? node.methodCode : (node.functionCode || "Source code not available")}</code></pre>
+                        <pre><code class="language-javascript">\${node.methodCode || node.functionCode || "Source code not available"}</code></pre>
                       </div>
                     </div>
                     
@@ -941,9 +958,9 @@ class Format {
             </div>
             <div class="section-content">
               <pre><code class="language-javascript">${
-                node.classCode
-                  ? node.methodCode
-                  : node.functionCode || "Source code not available"
+                node.methodCode ||
+                node.functionCode ||
+                "Source code not available"
               }</code></pre>
             </div>
           </div>
@@ -1090,7 +1107,7 @@ class Format {
 
           // 순환 참조 처리
           if (seen.has(value)) {
-            return `[Circular ${value.constructor?.name || "Object"}]`;
+            return "[Circular Object]";
           }
           seen.add(value);
         }
@@ -1098,7 +1115,7 @@ class Format {
         return value;
       });
     } catch (e) {
-      return `[Unstringifiable ${value?.constructor?.name || typeof value}]`;
+      return "[Unstringifiable Object]";
     }
   }
 }

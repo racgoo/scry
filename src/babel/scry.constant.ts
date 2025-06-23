@@ -16,6 +16,10 @@ export const TRACE_ZONE = "__TRACE_ZONE__";
 export const ACTIVE_TRACE_ID_SET = "__ACTIVE_TRACE_ID_SET__";
 //Marker for parent trace id declare
 export const PARENT_TRACE_ID_MARKER = "__PARENT_TRACE_ID_MARK__";
+//Marker for origin code start
+export const ORIGINAL_CODE_START_MARKER = "__ORIGINAL_CODE_START_MARK__";
+//Marker for origin code end
+export const ORIGINAL_CODE_END_MARKER = "__ORIGINAL_CODE_END_MARK__";
 
 //Event type for trace event
 export const ScryEventType = {

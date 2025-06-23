@@ -2,7 +2,7 @@
   "name": "nodetest",
   "version": "1.0.0",
   "main": "src/index.js",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "start": "npm run build && node dist/index.js",
     "dev_reload": "npm run reload && npm run build && node dist/index.js",

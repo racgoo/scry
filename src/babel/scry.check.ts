@@ -179,7 +179,6 @@ class ScryChecker {
         path.node.callee.object.name === "process")
     );
   }
-
   //Check if the function is a JSX function
   public isJSX(
     path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>

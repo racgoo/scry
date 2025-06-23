@@ -9,6 +9,8 @@ import {
   TRACE_ZONE,
   ACTIVE_TRACE_ID_SET,
   PARENT_TRACE_ID_MARKER,
+  ORIGINAL_CODE_START_MARKER,
+  ORIGINAL_CODE_END_MARKER,
   // ACTIVE_TRACE_ID_SET,
 } from "./scry.constant.js";
 
@@ -90,7 +92,7 @@ class ScryAst {
       | babel.types.ClassMethod
     >
   ) {
-    const parentDecl = this.t.variableDeclaration("let", [
+    const parentDecl = this.t.variableDeclaration("var", [
       this.t.variableDeclarator(
         this.t.identifier(ScryAstVariable.parentTraceId),
         this.t.stringLiteral(PARENT_TRACE_ID_MARKER)
@@ -111,31 +113,77 @@ class ScryAst {
     }
   }
 
-  public createCodeExtractor() {
-    return this.t.variableDeclaration("const", [
-      this.t.variableDeclarator(
-        this.t.identifier("code"),
-        this.t.objectExpression([
-          this.t.objectProperty(
-            this.t.identifier("classCode"),
-            this.t.stringLiteral("")
-          ),
-          this.t.objectProperty(
-            this.t.identifier("functionCode"),
-            this.t.stringLiteral("")
-          ),
-          this.t.objectProperty(
-            this.t.identifier("methodCode"),
-            this.t.stringLiteral("")
-          ),
-        ])
-      ),
-    ]);
+  public createCodeExtractor(
+    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
+  ) {
+    const callee = path.node.callee;
+    if (this.t.isMemberExpression(callee)) {
+      return this.t.variableDeclaration("const", [
+        this.t.variableDeclarator(
+          this.t.identifier("code"),
+          this.t.callExpression(
+            this.t.memberExpression(
+              this.t.identifier("Extractor"),
+              this.t.identifier("extractCode")
+            ),
+            [
+              callee.object,
+              this.t.stringLiteral(
+                this.t.isIdentifier(callee.property) ? callee.property.name : ""
+              ),
+              this.t.nullLiteral(),
+            ]
+          )
+        ),
+      ]);
+    } else {
+      return this.t.variableDeclaration("const", [
+        this.t.variableDeclarator(
+          this.t.identifier("code"),
+          this.t.callExpression(
+            this.t.memberExpression(
+              this.t.identifier("Extractor"),
+              this.t.identifier("extractCode")
+            ),
+            [
+              this.t.nullLiteral(),
+              this.t.nullLiteral(),
+              callee as babel.types.Identifier,
+            ]
+          )
+        ),
+      ]);
+    }
   }
+  // public createCodeExtractor() {
+  //   return this.t.variableDeclaration("const", [
+  //     this.t.variableDeclarator(
+  //       this.t.identifier("code"),
+  //       this.t.objectExpression([
+  //         this.t.objectProperty(
+  //           this.t.identifier("classCode"),
+  //           this.t.stringLiteral("")
+  //         ),
+  //         this.t.objectProperty(
+  //           this.t.identifier("functionCode"),
+  //           this.t.stringLiteral("")
+  //         ),
+  //         this.t.objectProperty(
+  //           this.t.identifier("methodCode"),
+  //           this.t.stringLiteral("")
+  //         ),
+  //       ])
+  //     ),
+  //   ]);
+  // }
 
   public preProcess(
     path: babel.NodePath<
-      babel.types.FunctionDeclaration | babel.types.ClassDeclaration
+      | babel.types.FunctionDeclaration
+      | babel.types.ClassDeclaration
+      | babel.types.ClassMethod
+      | babel.types.ObjectMethod
+      | babel.types.ArrowFunctionExpression
     >,
     scryAst: ScryAst,
     scryChecker: ScryChecker,
@@ -151,27 +199,42 @@ class ScryAst {
       path.skip();
       return;
     }
-    scryAst.createOriginCodeComment(path, code);
+    scryAst.createOriginCodeString(path, code);
   }
 
-  public createOriginCodeComment(
+  public createOriginCodeString(
     path: babel.NodePath<
-      babel.types.FunctionDeclaration | babel.types.ClassDeclaration
+      | babel.types.ArrowFunctionExpression
+      | babel.types.FunctionDeclaration
+      | babel.types.ClassDeclaration
+      | babel.types.ClassMethod
+      | babel.types.ObjectMethod
     >,
     code: string
   ) {
     const originalSource = code.slice(path.node.start!, path.node.end!);
-    const commentNode = this.t.emptyStatement();
-    commentNode.leadingComments = [
-      {
-        type: "CommentBlock",
-        value: `\n__ORIGINAL__\n${originalSource}\n`,
-      },
-    ];
+    const commentNode = this.t.blockStatement([
+      this.t.expressionStatement(
+        this.t.stringLiteral(
+          `${ORIGINAL_CODE_START_MARKER}${originalSource}${ORIGINAL_CODE_END_MARKER}`
+        )
+      ),
+      this.t.emptyStatement(),
+    ]);
     if (path.isClassDeclaration()) {
-      path.insertAfter(commentNode);
-    }
-    if (path.isFunctionDeclaration()) {
+      path.node.body.body.unshift(this.t.staticBlock([commentNode]));
+    } else if (path.isClassMethod()) {
+      path.node.body.body.unshift(commentNode);
+    } else if (path.isObjectMethod()) {
+      path.node.body.body.unshift(commentNode);
+    } else if (path.isFunctionDeclaration()) {
+      path.node.body.body.unshift(commentNode);
+    } else if (path.isArrowFunctionExpression()) {
+      if (!this.t.isBlockStatement(path.node.body)) {
+        path.node.body = this.t.blockStatement([
+          this.t.returnStatement(path.node.body),
+        ]);
+      }
       path.node.body.body.unshift(commentNode);
     }
   }

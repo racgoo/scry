@@ -8,7 +8,6 @@ function scryBabelPlugin(
   type: "cjs" | "esm" //Output type
 ) {
   //Pre process for origin code comment(but it must be done in visitor)
-  const esm = type === "esm";
   const pre = function (this: babel.PluginPass) {
     if (ScryChecker.isNodeModule(this)) return;
     try {
@@ -32,6 +31,33 @@ function scryBabelPlugin(
               scryAst.preProcess(path, scryAst, scryChecker, code);
             } catch (error) {
               console.error("pre process ClassDeclaration error:", error);
+            }
+          },
+          ClassMethod(path) {
+            //Pre process for origin code as string
+            try {
+              scryAst.preProcess(path, scryAst, scryChecker, code);
+            } catch (error) {
+              console.error("pre process ClassMethod error:", error);
+            }
+          },
+          ObjectMethod(path) {
+            //Pre process for origin code as string
+            try {
+              scryAst.preProcess(path, scryAst, scryChecker, code);
+            } catch (error) {
+              console.error("pre process ObjectMethod error:", error);
+            }
+          },
+          ArrowFunctionExpression(path) {
+            //Pre process for origin code as string
+            try {
+              scryAst.preProcess(path, scryAst, scryChecker, code);
+            } catch (error) {
+              console.error(
+                "pre process ArrowFunctionExpression error:",
+                error
+              );
             }
           },
         });
@@ -211,7 +237,7 @@ function scryBabelPlugin(
           //Create parent traceId optional updater(for async/await)
           scryAst.createParentTraceIdOptionalUpdater(path),
           //Extract code from location
-          scryAst.createCodeExtractor(),
+          scryAst.createCodeExtractor(path),
           //Generate 'enter' event
           t.expressionStatement(
             scryAst.emitTraceEvent(
