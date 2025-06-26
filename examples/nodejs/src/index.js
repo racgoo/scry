@@ -6,6 +6,7 @@ import { classTest, asyncTest, syncTest } from "./mjs-test.js";
 // const { classTest, asyncTest, syncTest } = require("./cjs-test.js");
 
 Tracer.start();
+
 asyncTest();
 syncTest();
 classTest();

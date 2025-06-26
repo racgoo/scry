@@ -14,6 +14,9 @@ export const DEVELOPMENT_MODE = "development";
 export const TRACE_ZONE = "__TRACE_ZONE__";
 //Name for active trace id set(with zone.js)
 export const ACTIVE_TRACE_ID_SET = "__ACTIVE_TRACE_ID_SET__";
+//Name for active trace id set(with zone.js)
+export const ACTIVE_TRACE_ID_MAP_WITH_BUNDLE_ID =
+  "__ACTIVE_TRACE_ID_MAP_WITH_BUNDLE_ID__";
 //Marker for parent trace id declare
 export const PARENT_TRACE_ID_MARKER = "__PARENT_TRACE_ID_MARK__";
 //Marker for origin code start
@@ -30,6 +33,9 @@ export const ScryEventType = {
 //Variable name for babel AST
 export const ScryAstVariable = {
   traceId: "traceId",
+  traceContext: "traceContext",
+  //trace bundle id(when Tracer.start() is called, bundle id is generated)
+  traceBundleId: "traceBundleId",
   parentTraceId: "parentTraceId",
   returnValue: "returnValue",
   args: "args",
@@ -48,4 +54,6 @@ export const ScryAstVariable = {
   functionCode: "functionCode",
   classCode: "classCode",
   methodCode: "methodCode",
+  //zone.js property
+  _properties: "_properties",
 };

@@ -7,6 +7,10 @@
     ".": {
       "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.cjs"
+    },
+    "./babel": {
+      "import": "./dist/esm/babel/index.js",
+      "require": "./dist/cjs/babel/index.cjs"
     }
   },
   "repository": {

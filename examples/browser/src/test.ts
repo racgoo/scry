@@ -47,3 +47,7 @@ export const classTest = () => {
   const testInstance = new TestClass();
   testInstance.test();
 };
+
+export const chainedTest = () => {
+  [1, 2, 3].map((num) => num * 2).filter((num) => num > 3);
+};

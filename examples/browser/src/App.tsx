@@ -2,14 +2,18 @@ import reactLogo from "./assets/react.svg";
 import viteLogo from "/vite.svg";
 import "./App.css";
 import { Tracer } from "@racgoo/scry";
-import { asyncTest, classTest, syncTest } from "./test";
+
+import { asyncTest, chainedTest, classTest, syncTest } from "./test";
 
 function App() {
   function handleClick() {
-    Tracer.start();
+    Tracer.start("hi1");
+    chainedTest();
+    classTest();
+    Tracer.end();
+    Tracer.start("hi2");
     syncTest();
     asyncTest();
-    classTest();
     Tracer.end();
   }
 

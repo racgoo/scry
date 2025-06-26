@@ -4,7 +4,7 @@ import Format from "./format.js";
 import { Output } from "../utils/output.js";
 import { Environment } from "../utils/enviroment.js";
 import {
-  ACTIVE_TRACE_ID_SET,
+  // ACTIVE_TRACE_ID_SET,
   TRACE_EVENT_NAME,
 } from "../babel/scry.constant.js";
 
@@ -12,29 +12,20 @@ import {
 class Tracer {
   private isTracing = false;
   //Trace details(like stack trace)
-  private details: Detail[] = [];
-  //Trace start time(dayjs)
-  private startTime: dayjs.Dayjs = dayjs();
-  //Trace duration(ms)
-  private duration: number = 0;
+  private bundleMap: Map<
+    number,
+    {
+      description: string;
+      details: Detail[];
+      startTime: dayjs.Dayjs;
+      duration: number;
+      activeTraceIdSet: Set<number>;
+    }
+  > = new Map();
   //Bind onTrace function(for static method call)
   private boundOnTrace = this.onTrace.bind(this) as EventListener;
 
-  //Start tracing
-  public start() {
-    if (this.isTracing) {
-      Output.printError(
-        "Tracing is already started. Please call Tracer.end() first."
-      );
-      return;
-    }
-    //Init context history(for zone.js)
-    this.initContextHistory();
-    //Set tracing flag
-    this.isTracing = true;
-    //Init start time
-    this.startTime = dayjs();
-    //Register event listener according to the execution environment
+  constructor() {
     if (Environment.isNodeJS()) {
       //Nodejs use process event
       process.on(TRACE_EVENT_NAME, this.boundOnTrace);
@@ -42,83 +33,159 @@ class Tracer {
       //Browser use globalThis event
       globalThis.addEventListener(TRACE_EVENT_NAME, this.boundOnTrace);
     }
+  }
+  //Trace description
+  private currentOption: {
+    description: string;
+    traceBundleId: number;
+  } = {
+    description: "",
+    traceBundleId: 0,
+  };
+
+  //Start tracing
+  public start(description?: string) {
+    if (this.isTracing) {
+      Output.printError(
+        "Tracing is already started. Please call Tracer.end() first."
+      );
+      return;
+    }
+    //Update current option
+    this.currentOption.description = description || "";
+    this.currentOption.traceBundleId++;
+    Function(
+      `Zone.root._properties.traceContext.traceBundleId = ${this.currentOption.traceBundleId};`
+    )();
+    Function(
+      `Zone.current._properties.traceContext.traceBundleId = ${this.currentOption.traceBundleId};`
+    )();
+
+    this.isTracing = true;
+
+    //Init details with bundle id
+    if (!this.bundleMap.has(this.currentOption.traceBundleId)) {
+      this.bundleMap.set(this.currentOption.traceBundleId, {
+        description: description || "",
+        details: [],
+        startTime: dayjs(),
+        duration: 0,
+        activeTraceIdSet: new Set(),
+      });
+    }
+
+    //Register event listener according to the execution environment
+
     Output.printDivider();
     Output.print("Tracer is started");
   }
 
   //End tracing
-  async end() {
+  end() {
     if (!this.isTracing) {
       Output.printError(
         "Tracing is not started. Please call Tracer.start() first."
       );
       return;
     }
+    const endBundleId = this.currentOption.traceBundleId;
+    this.isTracing = false;
+
+    Function(`Zone.root._properties.traceContext.traceBundleId = null;`)();
+    Function(`Zone.current._properties.traceContext.traceBundleId = null;`)();
+
     //Wait for all return values to be resolved
     //this logic is wait for async context done(await promise context with 'then' trigger)
-    while (this.isTracing) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      if (this.isAllContextDone()) break;
-    }
-    //Make trace tree(hierarchical tree structure by call)
-    const traceNodes: TraceNode[] = this.makeTraceNodes(this.details);
-    //Update duration
-    this.duration = dayjs().diff(this.startTime, "ms");
-    //Remove event listener according to the execution environment
-    if (Environment.isNodeJS()) {
-      //Nodejs use process event
-      process.removeListener(TRACE_EVENT_NAME, this.boundOnTrace);
-    } else {
-      //Browser use globalThis event
-      globalThis.removeEventListener(TRACE_EVENT_NAME, this.boundOnTrace);
-    }
-    //Generate html root for Display UI(HTML)
-    const htmlRoot = Format.generateHtmlRoot(
-      traceNodes,
-      this.startTime,
-      this.duration
-    );
-    //Use display ui for Browser(Nodejs use file system)
-    if (Environment.isNodeJS()) {
-      import("fs").then(async (fs) => {
-        //Create scry directory if not exists
-        if (!fs.existsSync("scry")) {
-          fs.mkdirSync("scry");
+    const asyncTaskLoading = new Promise((resolve) => {
+      const interval = setInterval(() => {
+        if (this.isAllContextDone(endBundleId)) {
+          resolve(true);
+          clearInterval(interval);
         }
-        //Create report directory if not exists
-        if (!fs.existsSync("scry/report")) {
-          fs.mkdirSync("scry/report");
-        }
-        //Trace end date
-        const now = dayjs().format("YYYY-MM-DD_HH-mm-ss");
-        //File path for result
-        const filePath = `scry/report/TraceResult:${now}.html`;
-        fs.writeFileSync(filePath, htmlRoot);
+      }, 100);
+    });
+
+    asyncTaskLoading.then(() => {
+      //Get current bundle details
+      const currentBundleDetails =
+        this.bundleMap.get(endBundleId)?.details || [];
+      //Make trace tree(hierarchical tree structure by call)
+      const traceNodes: TraceNode[] = this.makeTraceNodes(currentBundleDetails);
+      //Update duration
+      this.bundleMap.get(endBundleId)!.duration = dayjs().diff(
+        this.bundleMap.get(endBundleId)!.startTime,
+        "ms"
+      );
+
+      //Generate html root for Display UI(HTML)
+      const htmlRoot = Format.generateHtmlRoot(
+        this.bundleMap.get(endBundleId)!.description,
+        traceNodes,
+        this.bundleMap.get(endBundleId)!.startTime,
+        this.bundleMap.get(endBundleId)!.duration
+      );
+      //Use display ui for Browser(Nodejs use file system)
+      if (Environment.isNodeJS()) {
+        import("fs").then(async (fs) => {
+          //Create scry directory if not exists
+          if (!fs.existsSync("scry")) {
+            fs.mkdirSync("scry");
+          }
+          //Create report directory if not exists
+          if (!fs.existsSync("scry/report")) {
+            fs.mkdirSync("scry/report");
+          }
+          //Trace end date
+          const now = dayjs().format("YYYY-MM-DD_HH-mm-ss");
+          //File path for result
+          const filePath = `scry/report/TraceResult:${now}.html`;
+          fs.writeFileSync(filePath, htmlRoot);
+          //Open result html with browser
+          Output.openBrowser(filePath);
+        });
+      }
+      //Open tracing result window
+      if (!Environment.isNodeJS()) {
+        const blob = new Blob([htmlRoot], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
         //Open result html with browser
-        Output.openBrowser(filePath);
-      });
-    }
-    //Open tracing result window
-    if (!Environment.isNodeJS()) {
-      const blob = new Blob([htmlRoot], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
-      //Open result html with browser
-      Output.openBrowser(url);
-    }
-    //Clear settings
-    Output.print("Tracing is ended");
-    this.isTracing = false;
-    this.resetSettings();
+        Output.openBrowser(url);
+      }
+      //Clear settings
+      Output.print("Tracing is ended");
+    });
   }
 
   //OnTrace function. called when trace event is emitted.
   private onTrace(event: unknown) {
     // Nodejs use event directly, browser use custom event with detail
-    const detail = Environment.isNodeJS()
-      ? event
-      : (event as CustomEvent).detail;
-    //Save as detail(for making tree)
-    this.details.push(detail);
+    // const detail: Detail = (event as CustomEvent).detail;
+    const detail: Detail = (event as any).detail ?? (event as Detail);
+    if (!detail) {
+      Output.printError("Trace event detail is undefined");
+      return;
+    }
+
+    if (detail.traceBundleId === null) return;
+
+    //If detail is async done, delete trace id from active trace id set
+    if (detail.type === "async-done") {
+      this.bundleMap
+        .get(detail.traceBundleId)
+        ?.activeTraceIdSet.delete(detail.traceId);
+
+      return;
+    }
+    if (detail.type === "enter") {
+      //Add trace id to active trace id set(for async context done)
+      this.bundleMap
+        .get(detail.traceBundleId)
+        ?.activeTraceIdSet.add(detail.traceId);
+    }
+    // //Save as detail with bundle id(for making tree)
+    if (this.bundleMap.get(detail.traceBundleId)) {
+      this.bundleMap.get(detail.traceBundleId)!.details.push(detail);
+    }
     //If detail is error, show raw error(not trace tree)
     if (detail.returnValue instanceof Error) {
       Output.printError(detail.returnValue);
@@ -182,22 +249,29 @@ class Tracer {
   }
 
   //Check if all context is done(await promise context with 'then' trigger)
-  private isAllContextDone() {
-    //Zone.root has ACTIVE_TRACE_ID_SET as Active trace id set.
-    const { [ACTIVE_TRACE_ID_SET]: activeTraceIdSet } =
-      Zone.root as unknown as {
-        [ACTIVE_TRACE_ID_SET]: Set<number>;
-      };
-    //Return active context is not exist
-    return activeTraceIdSet.size === 0;
+  private isAllContextDone(bundleId: number) {
+    const bundle = this.bundleMap.get(bundleId);
+
+    if (!bundle) {
+      return true;
+    }
+
+    return bundle.activeTraceIdSet.size === 0;
+    // //Zone.root has ACTIVE_TRACE_ID_SET as Active trace id set.
+    // const { [ACTIVE_TRACE_ID_SET]: activeTraceIdSet } =
+    //   Zone.root as unknown as {
+    //     [ACTIVE_TRACE_ID_SET]: Set<number>;
+    //   };
+    // //Return active context is not exist
+    // return activeTraceIdSet.size === 0;
   }
 
   //Init context history(reset Zone.root.ACTIVE_TRACE_ID_SET )
-  private initContextHistory() {
-    (Zone.root as unknown as { [ACTIVE_TRACE_ID_SET]: Set<number> })[
-      ACTIVE_TRACE_ID_SET
-    ] = new Set();
-  }
+  // private initContextHistory() {
+  //   (Zone.root as unknown as { [ACTIVE_TRACE_ID_SET]: Set<number> })[
+  //     ACTIVE_TRACE_ID_SET
+  //   ] = new Set();
+  // }
 
   //Reverse chained nodes order
   //(because, babel plugin transform code with wrapping. so reverse order is needed)
@@ -279,13 +353,6 @@ class Tracer {
         newNodeMap.set(node.traceId, node);
       });
     return newNodeMap;
-  }
-  //Reset settings(Trace is single instance but, v8(nodejs,browser) use signle thread, there is no side effect)
-  private resetSettings() {
-    this.isTracing = false;
-    this.details = [];
-    this.startTime = dayjs();
-    this.duration = 0;
   }
 }
 

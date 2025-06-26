@@ -31,6 +31,7 @@ interface Detail {
   source: string;
   args: unknown[];
   chained: boolean;
+  traceBundleId: number;
   parentTraceId: number;
   returnValue: unknown;
   classCode: string;
@@ -52,4 +53,4 @@ interface DisplayDetailResult {
   };
 }
 
-type TraceEventType = "enter" | "exit";
+type TraceEventType = "enter" | "exit" | "async-done";

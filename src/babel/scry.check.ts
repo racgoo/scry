@@ -1,18 +1,32 @@
 import * as babel from "@babel/core";
 import { Environment } from "../utils/enviroment.js";
 import Extractor from "../utils/extractor.js";
-import {
-  ACTIVE_TRACE_ID_SET,
-  DEVELOPMENT_MODE,
-  TRACE_MARKER,
-  TRACE_ZONE,
-} from "./scry.constant.js";
+import { DEVELOPMENT_MODE, TRACE_MARKER, TRACE_ZONE } from "./scry.constant.js";
 
 //Checkers for scry babel plugin
 class ScryChecker {
   private t: typeof babel.types;
   constructor(t: typeof babel.types) {
     this.t = t;
+  }
+
+  //Check if the file is imported
+  public isImported(
+    path: babel.NodePath<babel.types.Program>,
+    name: string,
+    source: string
+  ) {
+    return path.node.body.some(
+      (node) =>
+        node.type === "ImportDeclaration" &&
+        node.source.value === source &&
+        node.specifiers.some(
+          (spec) =>
+            (spec.type === "ImportSpecifier" ||
+              spec.type === "ImportDefaultSpecifier") &&
+            spec.local.name === name
+        )
+    );
   }
   //Check if the file is a ESM file(Deprecated, because, babel plugin can't clearly detect ESM file)
   static isESM(state: babel.PluginPass): boolean {
@@ -61,6 +75,18 @@ class ScryChecker {
     );
   }
 
+  public isExtractorMethod(
+    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
+  ) {
+    const callee = path.node.callee;
+    return (
+      this.t.isMemberExpression(callee) &&
+      this.t.isIdentifier(callee.object) &&
+      callee.object.name === "Extractor" &&
+      this.t.isIdentifier(callee.property, { name: "extractCode" })
+    );
+  }
+
   //Check if the function is a Zone.root[ACTIVE_TRACE_ID_SET] = new Set() initialization
   public isZoneRootActiveTraceSetInit(
     path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
@@ -77,9 +103,9 @@ class ScryChecker {
         this.t.isIdentifier(parent.node.left.object.property, {
           name: "root",
         }) &&
-        this.t.isStringLiteral(parent.node.left.property, {
-          value: ACTIVE_TRACE_ID_SET,
-        }) &&
+        // this.t.isStringLiteral(parent.node.left.property, {
+        //   value: ACTIVE_TRACE_ID_SET,
+        // }) &&
         parent.node.left.computed
       ) {
         parent.skip();
