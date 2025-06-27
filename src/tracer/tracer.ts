@@ -3,37 +3,18 @@ import dayjs from "dayjs";
 import Format from "./format.js";
 import { Output } from "../utils/output.js";
 import { Environment } from "../utils/enviroment.js";
-import {
-  // ACTIVE_TRACE_ID_SET,
-  TRACE_EVENT_NAME,
-} from "../babel/scry.constant.js";
+import { TraceRecorder, TraceRecorderInterface } from "./record/index.js";
+import { TraceEvent } from "./record/constant.js";
 
 //Tracer class. for single instance.
 class Tracer {
   private isTracing = false;
   //Trace details(like stack trace)
-  private bundleMap: Map<
-    number,
-    {
-      description: string;
-      details: Detail[];
-      startTime: dayjs.Dayjs;
-      duration: number;
-      activeTraceIdSet: Set<number>;
-    }
-  > = new Map();
+  private recorder: TraceRecorderInterface = new TraceRecorder();
   //Bind onTrace function(for static method call)
   private boundOnTrace = this.onTrace.bind(this) as EventListener;
 
-  constructor() {
-    if (Environment.isNodeJS()) {
-      //Nodejs use process event
-      process.on(TRACE_EVENT_NAME, this.boundOnTrace);
-    } else {
-      //Browser use globalThis event
-      globalThis.addEventListener(TRACE_EVENT_NAME, this.boundOnTrace);
-    }
-  }
+  constructor() {}
   //Trace description
   private currentOption: {
     description: string;
@@ -64,14 +45,8 @@ class Tracer {
     this.isTracing = true;
 
     //Init details with bundle id
-    if (!this.bundleMap.has(this.currentOption.traceBundleId)) {
-      this.bundleMap.set(this.currentOption.traceBundleId, {
-        description: description || "",
-        details: [],
-        startTime: dayjs(),
-        duration: 0,
-        activeTraceIdSet: new Set(),
-      });
+    if (!this.recorder.hasBundle(this.currentOption.traceBundleId)) {
+      this.recorder.initBundle(this.currentOption.traceBundleId, description);
     }
 
     //Register event listener according to the execution environment
@@ -108,21 +83,21 @@ class Tracer {
     asyncTaskLoading.then(() => {
       //Get current bundle details
       const currentBundleDetails =
-        this.bundleMap.get(endBundleId)?.details || [];
+        this.recorder.getBundleMap().get(endBundleId)?.details || [];
       //Make trace tree(hierarchical tree structure by call)
       const traceNodes: TraceNode[] = this.makeTraceNodes(currentBundleDetails);
       //Update duration
-      this.bundleMap.get(endBundleId)!.duration = dayjs().diff(
-        this.bundleMap.get(endBundleId)!.startTime,
+      this.recorder.getBundleMap().get(endBundleId)!.duration = dayjs().diff(
+        this.recorder.getBundleMap().get(endBundleId)!.startTime,
         "ms"
       );
 
       //Generate html root for Display UI(HTML)
       const htmlRoot = Format.generateHtmlRoot(
-        this.bundleMap.get(endBundleId)!.description,
+        this.recorder.getBundleMap().get(endBundleId)!.description,
         traceNodes,
-        this.bundleMap.get(endBundleId)!.startTime,
-        this.bundleMap.get(endBundleId)!.duration
+        this.recorder.getBundleMap().get(endBundleId)!.startTime,
+        this.recorder.getBundleMap().get(endBundleId)!.duration
       );
       //Use display ui for Browser(Nodejs use file system)
       if (Environment.isNodeJS()) {
@@ -168,9 +143,11 @@ class Tracer {
 
     if (detail.traceBundleId === null) return;
 
+    const bundleMap = this.recorder.getBundleMap();
+
     //If detail is async done, delete trace id from active trace id set
-    if (detail.type === "async-done") {
-      this.bundleMap
+    if (detail.type === TraceEvent.DONE) {
+      bundleMap
         .get(detail.traceBundleId)
         ?.activeTraceIdSet.delete(detail.traceId);
 
@@ -178,13 +155,11 @@ class Tracer {
     }
     if (detail.type === "enter") {
       //Add trace id to active trace id set(for async context done)
-      this.bundleMap
-        .get(detail.traceBundleId)
-        ?.activeTraceIdSet.add(detail.traceId);
+      bundleMap.get(detail.traceBundleId)?.activeTraceIdSet.add(detail.traceId);
     }
     // //Save as detail with bundle id(for making tree)
-    if (this.bundleMap.get(detail.traceBundleId)) {
-      this.bundleMap.get(detail.traceBundleId)!.details.push(detail);
+    if (bundleMap.get(detail.traceBundleId)) {
+      bundleMap.get(detail.traceBundleId)!.details.push(detail);
     }
     //If detail is error, show raw error(not trace tree)
     if (detail.returnValue instanceof Error) {
@@ -250,28 +225,13 @@ class Tracer {
 
   //Check if all context is done(await promise context with 'then' trigger)
   private isAllContextDone(bundleId: number) {
-    const bundle = this.bundleMap.get(bundleId);
-
+    const bundleMap = this.recorder.getBundleMap();
+    const bundle = bundleMap.get(bundleId);
     if (!bundle) {
       return true;
     }
-
     return bundle.activeTraceIdSet.size === 0;
-    // //Zone.root has ACTIVE_TRACE_ID_SET as Active trace id set.
-    // const { [ACTIVE_TRACE_ID_SET]: activeTraceIdSet } =
-    //   Zone.root as unknown as {
-    //     [ACTIVE_TRACE_ID_SET]: Set<number>;
-    //   };
-    // //Return active context is not exist
-    // return activeTraceIdSet.size === 0;
   }
-
-  //Init context history(reset Zone.root.ACTIVE_TRACE_ID_SET )
-  // private initContextHistory() {
-  //   (Zone.root as unknown as { [ACTIVE_TRACE_ID_SET]: Set<number> })[
-  //     ACTIVE_TRACE_ID_SET
-  //   ] = new Set();
-  // }
 
   //Reverse chained nodes order
   //(because, babel plugin transform code with wrapping. so reverse order is needed)

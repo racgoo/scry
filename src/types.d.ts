@@ -53,4 +53,4 @@ interface DisplayDetailResult {
   };
 }
 
-type TraceEventType = "enter" | "exit" | "async-done";
+type TraceEventType = "enter" | "exit" | "done";

@@ -748,7 +748,7 @@ class ScryAst {
                                 this.t.expressionStatement(
                                   this.emitTraceEvent(
                                     this.getEventDetail(path, state, {
-                                      type: "async-done",
+                                      type: "done",
                                       fnName: this.getFunctionName(path),
                                       chained: false,
                                     })
@@ -798,7 +798,7 @@ class ScryAst {
                       this.t.expressionStatement(
                         this.emitTraceEvent(
                           this.getEventDetail(path, state, {
-                            type: "async-done",
+                            type: "done",
                             fnName: this.getFunctionName(path),
                             chained: false,
                           })
@@ -890,7 +890,7 @@ class ScryAst {
       chained: boolean;
     }
   ) {
-    if (info.type !== "async-done") {
+    if (info.type !== "done") {
       return this.t.objectExpression([
         this.t.objectProperty(
           this.t.identifier(ScryAstVariable.traceBundleId),
