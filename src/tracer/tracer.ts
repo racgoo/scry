@@ -37,7 +37,8 @@ class Tracer {
     this.currentOption.traceBundleId++;
     this.currentOption.tracing = true;
     //Update current and root zone state with bundle id
-    this.updateCurrentAndRootZoneState(this.currentOption.traceBundleId);
+    this.updateCurrentAndRootZoneBundleId(this.currentOption.traceBundleId);
+    this.updateCurrentAndRootZoneParentTraceId(null);
     //Init details with bundle id
     if (!this.recorder.hasBundle(this.currentOption.traceBundleId)) {
       this.recorder.initBundle(this.currentOption.traceBundleId, description);
@@ -62,7 +63,8 @@ class Tracer {
     this.currentOption.tracing = false;
     this.currentOption.description = "";
     //Clear current and root zone state
-    this.updateCurrentAndRootZoneState(null);
+    this.updateCurrentAndRootZoneBundleId(null);
+    this.updateCurrentAndRootZoneParentTraceId(null);
 
     //Wait for all return values to be resolved
     //this logic is wait for all context return value to be done
@@ -149,7 +151,7 @@ class Tracer {
    * Zone.current is used for function-level execution context, while Zone.root is used for file-level execution
    * This ensures that subsequent logic tracks based on the updated state
    */
-  private updateCurrentAndRootZoneState(bundleId: number | null) {
+  private updateCurrentAndRootZoneBundleId(bundleId: number | null) {
     //Update current zone state
     (
       Zone.current as unknown as {
@@ -162,6 +164,20 @@ class Tracer {
         _properties: { traceContext: { traceBundleId: number | null } };
       }
     )._properties.traceContext.traceBundleId = bundleId;
+  }
+  private updateCurrentAndRootZoneParentTraceId(parentTraceId: number | null) {
+    //Update current zone state
+    (
+      Zone.current as unknown as {
+        _properties: { traceContext: { parentTraceId: number | null } };
+      }
+    )._properties.traceContext.parentTraceId = parentTraceId;
+    //Update root zone state
+    (
+      Zone.root as unknown as {
+        _properties: { traceContext: { parentTraceId: number | null } };
+      }
+    )._properties.traceContext.parentTraceId = parentTraceId;
   }
 }
 

@@ -11,8 +11,6 @@ import {
   PARENT_TRACE_ID_MARKER,
   ORIGINAL_CODE_START_MARKER,
   ORIGINAL_CODE_END_MARKER,
-
-  // ACTIVE_TRACE_ID_SET,
 } from "./scry.constant.js";
 import { TraceEventType } from "../tracer/record/type.js";
 
@@ -24,38 +22,24 @@ class ScryAst {
   }
 
   public createTraceContextOptionalUpdater() {
-    return this.t.ifStatement(
-      this.t.logicalExpression(
-        "||",
-        this.t.unaryExpression(
-          "!",
+    return this.t.blockStatement([
+      this.t.ifStatement(
+        this.t.binaryExpression(
+          "===",
           this.t.optionalMemberExpression(
             this.t.identifier(ScryAstVariable.traceContext),
-            this.t.identifier(ScryAstVariable.parentTraceId),
+            this.t.identifier(ScryAstVariable.traceBundleId),
             false,
             true // optional chaining
-          )
-        ),
-        this.t.logicalExpression(
-          "&&",
-          this.t.binaryExpression(
-            "!==",
-            this.t.memberExpression(
-              this.t.memberExpression(
-                this.t.memberExpression(
-                  this.t.identifier("Zone"),
-                  this.t.identifier("current")
-                ),
-                this.t.identifier(ScryAstVariable._properties)
-              ),
-              this.t.stringLiteral(ScryAstVariable.traceBundleId),
-              true
-            ),
-            this.t.nullLiteral()
           ),
-          this.t.binaryExpression(
-            "!==",
-            this.t.memberExpression(
+          this.t.nullLiteral()
+        ),
+
+        this.t.blockStatement([
+          this.t.expressionStatement(
+            this.t.assignmentExpression(
+              "=",
+              this.t.identifier(ScryAstVariable.traceContext),
               this.t.memberExpression(
                 this.t.memberExpression(
                   this.t.memberExpression(
@@ -66,21 +50,15 @@ class ScryAst {
                 ),
                 this.t.stringLiteral(ScryAstVariable.traceContext),
                 true
-              ),
-              this.t.identifier(ScryAstVariable.traceBundleId)
-            ),
-            this.t.memberExpression(
-              this.t.identifier(ScryAstVariable.traceContext),
-              this.t.identifier(ScryAstVariable.traceBundleId)
+              )
             )
-          )
-        )
+          ),
+        ])
       ),
-      this.t.blockStatement([
-        this.t.expressionStatement(
-          this.t.assignmentExpression(
-            "=",
-            this.t.identifier(ScryAstVariable.traceContext),
+      this.t.ifStatement(
+        this.t.binaryExpression(
+          "!==",
+          this.t.memberExpression(
             this.t.memberExpression(
               this.t.memberExpression(
                 this.t.memberExpression(
@@ -91,18 +69,18 @@ class ScryAst {
               ),
               this.t.stringLiteral(ScryAstVariable.traceContext),
               true
-            )
+            ),
+            this.t.identifier(ScryAstVariable.traceBundleId)
+          ),
+          this.t.memberExpression(
+            this.t.identifier(ScryAstVariable.traceContext),
+            this.t.identifier(ScryAstVariable.traceBundleId)
           )
         ),
-        this.t.expressionStatement(
-          this.t.assignmentExpression(
-            "=",
-            this.t.memberExpression(
-              this.t.identifier(ScryAstVariable.traceContext),
-              this.t.identifier(ScryAstVariable.traceBundleId)
-            ),
-            this.t.logicalExpression(
-              "??",
+        this.t.blockStatement([
+          this.t.expressionStatement(
+            this.t.assignmentExpression(
+              "=",
               this.t.memberExpression(
                 this.t.identifier(ScryAstVariable.traceContext),
                 this.t.identifier(ScryAstVariable.traceBundleId)
@@ -112,7 +90,7 @@ class ScryAst {
                   this.t.memberExpression(
                     this.t.memberExpression(
                       this.t.identifier("Zone"),
-                      this.t.identifier("root")
+                      this.t.identifier("current")
                     ),
                     this.t.identifier(ScryAstVariable._properties)
                   ),
@@ -122,10 +100,10 @@ class ScryAst {
                 this.t.identifier(ScryAstVariable.traceBundleId)
               )
             )
-          )
-        ),
-      ])
-    );
+          ),
+        ])
+      ),
+    ]);
   }
 
   public createParentTraceDeclare(

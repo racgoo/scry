@@ -1,22 +1,16 @@
 import reactLogo from "./assets/react.svg";
 import viteLogo from "/vite.svg";
 import "./App.css";
-import { Tracer } from "@racgoo/scry";
 
-import { asyncTest, chainedTest, classTest, syncTest } from "./test";
+import { asyncMultiplePhaseTest, syncMultiplePhaseTest } from "./test";
 
 function App() {
-  function handleClick() {
-    Tracer.start("hi1");
-    chainedTest();
-    classTest();
-    Tracer.end();
-    Tracer.start("hi2");
-    syncTest();
-    asyncTest();
-    Tracer.end();
+  function handleAsyncTestClick() {
+    asyncMultiplePhaseTest();
   }
-
+  function handleSyncTestClick() {
+    syncMultiplePhaseTest();
+  }
   return (
     <>
       <div style={{ display: "flex", gap: "10px" }}>
@@ -31,7 +25,10 @@ function App() {
       </div>
       <h1>!!Scry Test!!</h1>
       <div className="card">
-        <button onClick={handleClick}>Test Click Me</button>
+        <button onClick={handleAsyncTestClick} style={{ marginRight: 10 }}>
+          Async Test
+        </button>
+        <button onClick={handleSyncTestClick}>Sync Test</button>
       </div>
     </>
   );
