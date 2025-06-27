@@ -36,10 +36,10 @@ interface TraceDetail {
 }
 
 /**
- * TraceRecord.
- * This type is used to define the trace record.
+ * TraceBundle.
+ * This type is used to define the trace bundle.
  */
-interface TraceRecord {
+interface TraceBundle {
   description: string;
   details: TraceDetail[];
   startTime: dayjs.Dayjs;
@@ -47,4 +47,4 @@ interface TraceRecord {
   activeTraceIdSet: Set<number>;
 }
 
-export { TraceRecord, TraceDetail, TraceEventType };
+export { TraceBundle, TraceDetail, TraceEventType };

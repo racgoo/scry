@@ -1,7 +1,7 @@
 import TraceRecorder from "./TracerRecorder.js";
 import { TraceRecorderInterface } from "./interface.js";
 import { TraceEvent } from "./constant.js";
-import { TraceDetail, TraceRecord } from "./type.js";
+import { TraceDetail, TraceBundle } from "./type.js";
 
 /**
  * Export the trace record domain modules.
@@ -11,5 +11,5 @@ export {
   TraceRecorder,
   TraceEvent,
   TraceDetail,
-  TraceRecord,
+  TraceBundle,
 };

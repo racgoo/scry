@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
 import { Output } from "../../utils/output.js";
-import { TraceDetail, TraceRecord } from "./type.js";
+import { TraceDetail, TraceBundle } from "./type.js";
 import { TraceEvent } from "./constant.js";
 import { Environment } from "../../utils/enviroment.js";
 import { TRACE_EVENT_NAME } from "../../babel/scry.constant.js";
@@ -8,16 +8,15 @@ import { TraceRecorderInterface } from "./interface.js";
 
 /**
  * TraceRecorder class.
- * This class is used to record the trace event and mutate records.
+ * This class is used to record the trace event and mutate bundles or details.
  * Implement TraceRecorderInterface to define the interface of the TraceRecorder.
  */
 class TraceRecorder implements TraceRecorderInterface {
-  private bundleMap: Map<number, TraceRecord> = new Map();
+  private bundleMap: Map<number, TraceBundle> = new Map();
   private boundOnTrace = this.onTrace.bind(this) as EventListener;
   constructor() {
     this.initEventListener();
   }
-
   /**
    * onTrace method.
    * This method is used to handle the trace event.
@@ -49,7 +48,6 @@ class TraceRecorder implements TraceRecorderInterface {
         return;
     }
   }
-
   /**
    * getBundleMap method.
    * This method is used to get the bundleMap.
@@ -57,7 +55,6 @@ class TraceRecorder implements TraceRecorderInterface {
   public getBundleMap() {
     return this.bundleMap;
   }
-
   /**
    * initBundle method.
    * This method is used to initialize the bundle as bundleMap's [key,value] with bundleId and description.
@@ -71,7 +68,6 @@ class TraceRecorder implements TraceRecorderInterface {
       activeTraceIdSet: new Set(),
     });
   }
-
   /**
    * addDetailToBundle method.
    * This method is used to add the detail to the bundle in bundleMap.
@@ -81,7 +77,6 @@ class TraceRecorder implements TraceRecorderInterface {
       this.bundleMap.get(detail.traceBundleId)!.details.push(detail);
     }
   }
-
   /**
    * hasBundle method.
    * This method is used to check if the bundle is exists in bundleMap.
@@ -89,7 +84,6 @@ class TraceRecorder implements TraceRecorderInterface {
   public hasBundle(bundleId: number) {
     return this.bundleMap.has(bundleId);
   }
-
   /**
    * getTraceDetail method.
    * This method is used to get the trace detail from event.
@@ -99,7 +93,6 @@ class TraceRecorder implements TraceRecorderInterface {
       (event as { detail?: TraceDetail }).detail ?? (event as TraceDetail);
     return detail ?? null;
   }
-
   /**
    * handleDoneType method.
    * This method is used to handle the done type detail.
@@ -120,7 +113,6 @@ class TraceRecorder implements TraceRecorderInterface {
       ?.activeTraceIdSet.add(detail.traceId);
     this.addDetailToBundle(detail);
   }
-
   /**
    * handleExitType method.
    * This method is used to handle the exit type detail.
@@ -128,7 +120,6 @@ class TraceRecorder implements TraceRecorderInterface {
   private handleExitType(detail: TraceDetail) {
     this.addDetailToBundle(detail);
   }
-
   /**
    * isErrorReturnValue method.
    * This method is used to check if the return value in detail is error.
@@ -136,7 +127,6 @@ class TraceRecorder implements TraceRecorderInterface {
   private isErrorReturnValue(detail: TraceDetail) {
     return detail.returnValue instanceof Error;
   }
-
   /**
    * handleErrorReturnValue method.
    * This method is used to handle the error return value in detail.
@@ -144,7 +134,6 @@ class TraceRecorder implements TraceRecorderInterface {
   private handleErrorReturnValue(detail: TraceDetail) {
     Output.printError("Error return value: ", detail.returnValue);
   }
-
   /**
    * isValidDetail method.
    * This method is used to check if the detail is valid(not null and traceBundleId is not null).
@@ -152,7 +141,6 @@ class TraceRecorder implements TraceRecorderInterface {
   private isValidDetail(detail: TraceDetail | null) {
     return detail !== null && detail.traceBundleId !== null;
   }
-
   /**
    * initEventListener method.
    * This method is used to initialize the event listener.
