@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
+import { TraceBundle, TraceDetail } from "./type.js";
 import { Output } from "../../utils/output.js";
-import { TraceDetail, TraceBundle } from "./type.js";
 import { TraceEvent } from "./constant.js";
 import { Environment } from "../../utils/enviroment.js";
 import { TRACE_EVENT_NAME } from "../../babel/scry.constant.js";

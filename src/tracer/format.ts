@@ -1,5 +1,6 @@
 import { Environment } from "../utils/enviroment.js";
 import dayjs from "dayjs";
+import { TraceNode } from "./node/type.js";
 
 //data formatter for trace result(Made by claude:))
 class Format {

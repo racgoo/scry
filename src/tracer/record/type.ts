@@ -47,4 +47,4 @@ interface TraceBundle {
   activeTraceIdSet: Set<number>;
 }
 
-export { TraceBundle, TraceDetail, TraceEventType };
+export type { TraceBundle, TraceDetail, TraceEventType };

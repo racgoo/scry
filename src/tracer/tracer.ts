@@ -3,30 +3,30 @@ import dayjs from "dayjs";
 import Format from "./format.js";
 import { Output } from "../utils/output.js";
 import { Environment } from "../utils/enviroment.js";
+import { TraceNode } from "./node/type.js";
 import { TraceRecorder, TraceRecorderInterface } from "./record/index.js";
-import { TraceEvent } from "./record/constant.js";
+import { NodeGenerator, NodeGeneratorInterface } from "./node/index.js";
+import { TracerOption } from "./type.js";
 
 //Tracer class. for single instance.
 class Tracer {
-  private isTracing = false;
-  //Trace details(like stack trace)
+  //Recorder for trace details(emitted by babel plugin code)
   private recorder: TraceRecorderInterface = new TraceRecorder();
-  //Bind onTrace function(for static method call)
-  private boundOnTrace = this.onTrace.bind(this) as EventListener;
-
-  constructor() {}
-  //Trace description
-  private currentOption: {
-    description: string;
-    traceBundleId: number;
-  } = {
+  //Generator for trace nodes(generate trace nodes from trace details)
+  private nodeGenerator: NodeGeneratorInterface = new NodeGenerator();
+  //Tracer option for each tracing
+  private currentOption: TracerOption = {
+    tracing: false,
     description: "",
     traceBundleId: 0,
   };
 
+  constructor() {}
+
   //Start tracing
   public start(description?: string) {
-    if (this.isTracing) {
+    //Check if tracing is already started
+    if (this.currentOption.tracing) {
       Output.printError(
         "Tracing is already started. Please call Tracer.end() first."
       );
@@ -35,57 +35,65 @@ class Tracer {
     //Update current option
     this.currentOption.description = description || "";
     this.currentOption.traceBundleId++;
+    this.currentOption.tracing = true;
+    //Update trace bundle id to zone.js
     Function(
       `Zone.root._properties.traceContext.traceBundleId = ${this.currentOption.traceBundleId};`
     )();
     Function(
       `Zone.current._properties.traceContext.traceBundleId = ${this.currentOption.traceBundleId};`
     )();
-
-    this.isTracing = true;
-
     //Init details with bundle id
     if (!this.recorder.hasBundle(this.currentOption.traceBundleId)) {
       this.recorder.initBundle(this.currentOption.traceBundleId, description);
     }
-
-    //Register event listener according to the execution environment
-
+    //Print divider and tracing start message
     Output.printDivider();
     Output.print("Tracer is started");
   }
 
   //End tracing
   end() {
-    if (!this.isTracing) {
+    //Check if tracing is started
+    if (!this.currentOption.tracing) {
       Output.printError(
         "Tracing is not started. Please call Tracer.start() first."
       );
       return;
     }
+    //Get end bundle id(as primitive member variable, because it will be changed during async task)
     const endBundleId = this.currentOption.traceBundleId;
-    this.isTracing = false;
-
+    //Clear current option
+    this.currentOption.tracing = false;
+    this.currentOption.description = "";
+    //Clear trace bundle id from zone.js
     Function(`Zone.root._properties.traceContext.traceBundleId = null;`)();
     Function(`Zone.current._properties.traceContext.traceBundleId = null;`)();
 
     //Wait for all return values to be resolved
-    //this logic is wait for async context done(await promise context with 'then' trigger)
+    //this logic is wait for all context return value to be done
+    //in Promise, return value is resolved when 'then' trigger
+    //in Object, return value is resolved automatically when context is done
     const asyncTaskLoading = new Promise((resolve) => {
+      //Check if all context is done(end is sync task, so we need to check it with interval)
       const interval = setInterval(() => {
         if (this.isAllContextDone(endBundleId)) {
+          //If all context is done, resolve promise
           resolve(true);
+          //Clear interval
           clearInterval(interval);
         }
-      }, 100);
+      }, 10);
     });
 
+    //Wait for all return values to be resolved
     asyncTaskLoading.then(() => {
       //Get current bundle details
       const currentBundleDetails =
         this.recorder.getBundleMap().get(endBundleId)?.details || [];
       //Make trace tree(hierarchical tree structure by call)
-      const traceNodes: TraceNode[] = this.makeTraceNodes(currentBundleDetails);
+      const traceNodes: TraceNode[] =
+        this.nodeGenerator.generateNodesWithTraceDetails(currentBundleDetails);
       //Update duration
       this.recorder.getBundleMap().get(endBundleId)!.duration = dayjs().diff(
         this.recorder.getBundleMap().get(endBundleId)!.startTime,
@@ -131,98 +139,6 @@ class Tracer {
     });
   }
 
-  //OnTrace function. called when trace event is emitted.
-  private onTrace(event: unknown) {
-    // Nodejs use event directly, browser use custom event with detail
-    // const detail: Detail = (event as CustomEvent).detail;
-    const detail: Detail = (event as any).detail ?? (event as Detail);
-    if (!detail) {
-      Output.printError("Trace event detail is undefined");
-      return;
-    }
-
-    if (detail.traceBundleId === null) return;
-
-    const bundleMap = this.recorder.getBundleMap();
-
-    //If detail is async done, delete trace id from active trace id set
-    if (detail.type === TraceEvent.DONE) {
-      bundleMap
-        .get(detail.traceBundleId)
-        ?.activeTraceIdSet.delete(detail.traceId);
-
-      return;
-    }
-    if (detail.type === "enter") {
-      //Add trace id to active trace id set(for async context done)
-      bundleMap.get(detail.traceBundleId)?.activeTraceIdSet.add(detail.traceId);
-    }
-    // //Save as detail with bundle id(for making tree)
-    if (bundleMap.get(detail.traceBundleId)) {
-      bundleMap.get(detail.traceBundleId)!.details.push(detail);
-    }
-    //If detail is error, show raw error(not trace tree)
-    if (detail.returnValue instanceof Error) {
-      Output.printError(detail.returnValue);
-    }
-  }
-
-  //Make trace nodes(hierarchical tree structure by call)
-  private makeTraceNodes(details: Detail[]): TraceNode[] {
-    const traceNodes: TraceNode[] = [];
-    let nodeMap = new Map<number, TraceNode>();
-    const enterDetails = details.filter((d) => d.type === "enter");
-    const enterIndexMap = new Map<number, number>();
-    for (let i = 0; i < enterDetails.length; i++) {
-      enterIndexMap.set(enterDetails[i].traceId, i);
-    }
-    //Create nodes(transform details to trace nodes)
-    for (const detail of details) {
-      if (detail.type === "enter") {
-        const node: TraceNode = {
-          parent: null,
-          errored: false,
-          traceId: detail.traceId,
-          name: detail.name,
-          source: detail.source,
-          functionCode: detail.functionCode,
-          methodCode: detail.methodCode,
-          classCode: detail.classCode,
-          args: detail.args || [],
-          children: [],
-          completed: false,
-          chained: detail.chained,
-          parentTraceId: detail.parentTraceId,
-        };
-        nodeMap.set(detail.traceId, node);
-      } else if (detail.type === "exit") {
-        const node = nodeMap.get(detail.traceId);
-        if (node) {
-          node.returnValue = detail.returnValue;
-          node.completed = true;
-          node.errored = detail.returnValue instanceof Error;
-        }
-      }
-    }
-    //Reverse chained nodes order(babel plugin transform code with wrapping. so reverse order is needed)
-    nodeMap = this.reverseChainedNodes(details, nodeMap);
-    //Setup parent-child relation
-    for (const node of nodeMap.values()) {
-      if (!node.parentTraceId) {
-        traceNodes.push(node);
-      } else {
-        const parent = nodeMap.get(node.parentTraceId);
-        if (parent) {
-          parent.children.push(node);
-          node.parent = parent;
-        } else {
-          traceNodes.push(node);
-        }
-      }
-    }
-    return traceNodes;
-  }
-
   //Check if all context is done(await promise context with 'then' trigger)
   private isAllContextDone(bundleId: number) {
     const bundleMap = this.recorder.getBundleMap();
@@ -231,88 +147,6 @@ class Tracer {
       return true;
     }
     return bundle.activeTraceIdSet.size === 0;
-  }
-
-  //Reverse chained nodes order
-  //(because, babel plugin transform code with wrapping. so reverse order is needed)
-  private reverseChainedNodes(
-    nodeDetails: Detail[],
-    nodeMap: Map<number, TraceNode>
-  ) {
-    const reversedChains: number[][] = [];
-    //Only one chain list(ex. .map().reduce().then() as [1,2,3])
-    const currentReversedChainTraceIds: number[] = [];
-    //Accumulating flag
-    let accumulating = false;
-    nodeDetails.some((detail) => {
-      const { chained, type } = detail;
-      //If type is exit, return false(not accumulate)
-      if (type === "exit") {
-        return false;
-      }
-      //If chained is true and accumulating is false, start accumulating
-      if (chained && !accumulating) {
-        //Start accumulating
-        accumulating = true;
-      }
-      if (accumulating) {
-        //Accumulate
-        currentReversedChainTraceIds.push(detail.traceId);
-      }
-      //If chained is false and accumulating is true, end accumulating
-      //Fist chain function's chained is false. so, it's not a chained function. just start function.
-      if (!chained && accumulating) {
-        //End accumulating
-        accumulating = false;
-        reversedChains.push(currentReversedChainTraceIds.slice());
-        currentReversedChainTraceIds.length = 0;
-      }
-    });
-    reversedChains.some((reversedChainTraceIds) => {
-      //Chain root parent trace id
-      const rootParentTraceId = nodeMap.get(
-        reversedChainTraceIds[0]
-      )?.parentTraceId;
-      //First chain function's trace id
-      const chainRootTraceId = nodeMap.get(
-        reversedChainTraceIds[reversedChainTraceIds.length - 1]
-      )!.traceId;
-      //Setup parent trace id as root parent id,and add chain info(for display)
-      for (let i = 0; i < reversedChainTraceIds.length; i++) {
-        const currentNode = nodeMap.get(reversedChainTraceIds[i])!;
-        currentNode.parentTraceId = rootParentTraceId;
-        currentNode.chainInfo = {
-          //Chain start trace id
-          startTraceId: chainRootTraceId,
-          //Chain index
-          index: reversedChainTraceIds.length - i,
-        };
-      }
-    });
-    //Create new node map, because, Map is ordered by insertion order
-    const newNodeMap = new Map<number, TraceNode>();
-    //Sort and update newNodeMap
-    Array.from(nodeMap.values())
-      //Sort by trace id
-      .sort((a, b) => {
-        if (a.traceId && b.traceId) {
-          return a.traceId - b.traceId;
-        }
-        return 0;
-      })
-      //Sort by chain index(must be chain node, if same start trace id, sort by chain index)
-      .sort((a, b) => {
-        if (a.chainInfo && b.chainInfo) {
-          if (a.chainInfo.startTraceId === b.chainInfo.startTraceId) {
-            return a.chainInfo.index - b.chainInfo.index;
-          }
-        }
-        return 0;
-      })
-      .some((node) => {
-        newNodeMap.set(node.traceId, node);
-      });
-    return newNodeMap;
   }
 }
 
