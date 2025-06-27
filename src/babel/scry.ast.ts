@@ -14,6 +14,7 @@ import {
 
   // ACTIVE_TRACE_ID_SET,
 } from "./scry.constant.js";
+import { TraceEventType } from "../tracer/record/type.js";
 
 //AST generators for scry babel plugin
 class ScryAst {

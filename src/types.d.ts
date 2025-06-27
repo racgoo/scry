@@ -9,3 +9,5 @@ interface DisplayDetailResult {
 }
 
 type TraceEventType = "enter" | "exit" | "done";
+
+export {};

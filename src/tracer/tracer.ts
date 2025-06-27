@@ -36,13 +36,8 @@ class Tracer {
     this.currentOption.description = description || "";
     this.currentOption.traceBundleId++;
     this.currentOption.tracing = true;
-    //Update trace bundle id to zone.js
-    Function(
-      `Zone.root._properties.traceContext.traceBundleId = ${this.currentOption.traceBundleId};`
-    )();
-    Function(
-      `Zone.current._properties.traceContext.traceBundleId = ${this.currentOption.traceBundleId};`
-    )();
+    //Update current and root zone state with bundle id
+    this.updateCurrentAndRootZoneState(this.currentOption.traceBundleId);
     //Init details with bundle id
     if (!this.recorder.hasBundle(this.currentOption.traceBundleId)) {
       this.recorder.initBundle(this.currentOption.traceBundleId, description);
@@ -66,9 +61,8 @@ class Tracer {
     //Clear current option
     this.currentOption.tracing = false;
     this.currentOption.description = "";
-    //Clear trace bundle id from zone.js
-    Function(`Zone.root._properties.traceContext.traceBundleId = null;`)();
-    Function(`Zone.current._properties.traceContext.traceBundleId = null;`)();
+    //Clear current and root zone state
+    this.updateCurrentAndRootZoneState(null);
 
     //Wait for all return values to be resolved
     //this logic is wait for all context return value to be done
@@ -147,6 +141,27 @@ class Tracer {
       return true;
     }
     return bundle.activeTraceIdSet.size === 0;
+  }
+
+  /**
+   * Update current and root zone state with bundle id
+   * When Tracer.start() or Tracer.end() is called, Zone.current and Zone.root states are updated
+   * Zone.current is used for function-level execution context, while Zone.root is used for file-level execution
+   * This ensures that subsequent logic tracks based on the updated state
+   */
+  private updateCurrentAndRootZoneState(bundleId: number | null) {
+    //Update current zone state
+    (
+      Zone.current as unknown as {
+        _properties: { traceContext: { traceBundleId: number | null } };
+      }
+    )._properties.traceContext.traceBundleId = bundleId;
+    //Update root zone state
+    (
+      Zone.root as unknown as {
+        _properties: { traceContext: { traceBundleId: number | null } };
+      }
+    )._properties.traceContext.traceBundleId = bundleId;
   }
 }
 
