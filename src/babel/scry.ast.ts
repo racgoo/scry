@@ -201,7 +201,7 @@ class ScryAst {
               chained
                 ? this.t.memberExpression(
                     this.t.identifier("globalThis"),
-                    this.t.identifier("pervReturnValue")
+                    this.t.identifier(ScryAstVariable.prevReturnValue)
                   )
                 : callee.object,
               // this.t.stringLiteral(originCode),

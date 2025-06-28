@@ -9,6 +9,7 @@ interface TraceRecorderInterface {
   initBundle(bundleId: number, description?: string): void;
   hasBundle(bundleId: number): boolean;
   addDetailToBundle(detail: TraceDetail): void;
+  waitAllContextDone(bundleId: number): Promise<boolean>;
 }
 
 export { TraceRecorderInterface };

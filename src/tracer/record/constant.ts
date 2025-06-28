@@ -10,4 +10,6 @@ const TraceEvent = {
   DONE: "done",
 } as const;
 
-export { TraceEvent };
+const WAIT_ALL_CONTEXT_DONE_INTERVAL = 10;
+
+export { TraceEvent, WAIT_ALL_CONTEXT_DONE_INTERVAL };

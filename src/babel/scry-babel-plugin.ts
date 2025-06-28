@@ -270,7 +270,7 @@ function scryBabelPlugin(
               "=",
               t.memberExpression(
                 t.identifier("globalThis"),
-                t.identifier("pervReturnValue")
+                t.identifier(ScryAstVariable.prevReturnValue)
               ),
               t.identifier(ScryAstVariable.returnValue)
             )

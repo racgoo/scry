@@ -56,4 +56,6 @@ export const ScryAstVariable = {
   methodCode: "methodCode",
   //zone.js property
   _properties: "_properties",
+  //prevReturnValue(for chained function, in case of method1().method2(), method1() is memorized as prevReturnValue)
+  prevReturnValue: "prevReturnValue",
 };

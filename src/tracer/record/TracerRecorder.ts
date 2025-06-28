@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
 import { TraceBundle, TraceDetail } from "./type.js";
 import { Output } from "../../utils/output.js";
-import { TraceEvent } from "./constant.js";
+import { TraceEvent, WAIT_ALL_CONTEXT_DONE_INTERVAL } from "./constant.js";
 import { Environment } from "../../utils/enviroment.js";
 import { TRACE_EVENT_NAME } from "../../babel/scry.constant.js";
 import { TraceRecorderInterface } from "./interface.js";
@@ -152,6 +152,37 @@ class TraceRecorder implements TraceRecorderInterface {
     } else {
       globalThis.addEventListener(TRACE_EVENT_NAME, this.boundOnTrace);
     }
+  }
+  /**
+   * isAllContextDone method.
+   * This method is used to check if all context is done.
+   * Check if all context is done
+   */
+  private isAllContextDone(bundleId: number) {
+    const bundle = this.getBundleMap().get(bundleId);
+    if (!bundle) {
+      return true;
+    }
+    return bundle.activeTraceIdSet.size === 0;
+  }
+
+  /**
+   * waitAllContextDone method.
+   * This method is used to wait for all context to be done.
+   * return Promise that resolve when all context is done.
+   */
+  public waitAllContextDone(bundleId: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      //Check if all context is done(end is sync task, so we need to check it with interval)
+      const interval = setInterval(() => {
+        if (this.isAllContextDone(bundleId)) {
+          //If all context is done, resolve promise
+          resolve(true);
+          //Clear interval
+          clearInterval(interval);
+        }
+      }, WAIT_ALL_CONTEXT_DONE_INTERVAL);
+    });
   }
 }
 
