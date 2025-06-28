@@ -2,12 +2,13 @@ import "zone.js";
 import dayjs from "dayjs";
 import Format from "./format.js";
 import { Output } from "../utils/output.js";
-import { Environment } from "../utils/enviroment.js";
 import { TraceNode } from "./node/type.js";
 import { TraceRecorder, TraceRecorderInterface } from "./record/index.js";
 import { NodeGenerator, NodeGeneratorInterface } from "./node/index.js";
 import { ZoneContext, ZoneContextInterface } from "./zone/index.js";
 import { TracerOption } from "./type.js";
+import { ExporterInterface } from "./export/interface.js";
+import { Exporter } from "./export/exporter.js";
 
 //Tracer class. for single instance.
 class Tracer {
@@ -17,6 +18,9 @@ class Tracer {
   private nodeGenerator: NodeGeneratorInterface = new NodeGenerator();
   //Zone context for update current and root zone state
   private zoneContext: ZoneContextInterface = new ZoneContext();
+  //Exporter for export trace result
+  private exporter: ExporterInterface = new Exporter();
+
   //Tracer option for each tracing
   private currentOption: TracerOption = {
     tracing: false,
@@ -85,33 +89,8 @@ class Tracer {
         this.recorder.getBundleMap().get(endBundleId)!.startTime,
         this.recorder.getBundleMap().get(endBundleId)!.duration
       );
-      //Use display ui for Browser(Nodejs use file system)
-      if (Environment.isNodeJS()) {
-        import("fs").then(async (fs) => {
-          //Create scry directory if not exists
-          if (!fs.existsSync("scry")) {
-            fs.mkdirSync("scry");
-          }
-          //Create report directory if not exists
-          if (!fs.existsSync("scry/report")) {
-            fs.mkdirSync("scry/report");
-          }
-          //Trace end date
-          const now = dayjs().format("YYYY-MM-DD_HH-mm-ss");
-          //File path for result
-          const filePath = `scry/report/TraceResult:${now}.html`;
-          fs.writeFileSync(filePath, htmlRoot);
-          //Open result html with browser
-          Output.openBrowser(filePath);
-        });
-      }
-      //Open tracing result window
-      if (!Environment.isNodeJS()) {
-        const blob = new Blob([htmlRoot], { type: "text/html" });
-        const url = URL.createObjectURL(blob);
-        //Open result html with browser
-        Output.openBrowser(url);
-      }
+      //Export html
+      this.exporter.exportHtml(htmlRoot);
     });
   }
 
