@@ -10,24 +10,119 @@ class ScryChecker {
     this.t = t;
   }
 
-  //Check if the file is imported
+  //Check if the function is imported without variable declaration(ex, import "@racgoo/scry")
+  public isImportedWithoutVariableDeclaration(
+    path: babel.NodePath<babel.types.Program>,
+    source: string,
+    esm: boolean
+  ) {
+    if (esm) {
+      if (
+        path.node.body.some(
+          (node) =>
+            node.type === "ImportDeclaration" &&
+            node.source.value === source &&
+            node.specifiers.length === 0
+        )
+      ) {
+        return true;
+      }
+    } else {
+      if (
+        path.node.body.some(
+          (node) =>
+            node.type === "ExpressionStatement" &&
+            node.expression.type === "CallExpression" &&
+            node.expression.callee.type === "Identifier" &&
+            node.expression.callee.name === "require" &&
+            node.expression.arguments.length > 0 &&
+            node.expression.arguments[0].type === "StringLiteral" &&
+            node.expression.arguments[0].value === source
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  //Check if the function is imported
   public isImported(
     path: babel.NodePath<babel.types.Program>,
     name: string,
-    source: string
+    source: string,
+    esm: boolean
   ) {
-    return path.node.body.some(
-      (node) =>
-        node.type === "ImportDeclaration" &&
-        node.source.value === source &&
-        node.specifiers.some(
-          (spec) =>
-            (spec.type === "ImportSpecifier" ||
-              spec.type === "ImportDefaultSpecifier") &&
-            spec.local.name === name
-        )
-    );
+    let imported;
+    if (esm) {
+      //Check is imported
+      imported = path.node.body.some(
+        (node) =>
+          node.type === "ImportDeclaration" &&
+          node.source.value === source &&
+          node.specifiers.some(
+            (spec) =>
+              spec.type === "ImportSpecifier" &&
+              spec.imported.type === "Identifier" &&
+              spec.imported.name === name
+          )
+      );
+    } else {
+      //Check is required
+      imported = path.node.body.some(
+        (node) =>
+          node.type === "VariableDeclaration" &&
+          node.declarations.some((decl) => {
+            if (
+              decl.init &&
+              decl.init.type === "CallExpression" &&
+              decl.init.callee.type === "Identifier" &&
+              decl.init.callee.name === "require" &&
+              decl.init.arguments.length > 0 &&
+              decl.init.arguments[0].type === "StringLiteral" &&
+              decl.init.arguments[0].value === source
+            ) {
+              // 구조분해 할당인지 확인
+              if (
+                decl.id.type === "ObjectPattern" &&
+                decl.id.properties.some(
+                  (prop) =>
+                    prop.type === "ObjectProperty" &&
+                    prop.key.type === "Identifier" &&
+                    prop.key.name === name
+                )
+              ) {
+                return true;
+              }
+              if (decl.id.type === "Identifier") {
+                return true;
+              }
+            }
+            return false;
+          })
+      );
+    }
+    return imported;
   }
+
+  //Check if the file is imported
+  // public isImported(
+  //   path: babel.NodePath<babel.types.Program>,
+  //   name: string,
+  //   source: string
+  // ) {
+  //   return path.node.body.some(
+  //     (node) =>
+  //       node.type === "ImportDeclaration" &&
+  //       node.source.value === source &&
+  //       node.specifiers.some(
+  //         (spec) =>
+  //           (spec.type === "ImportSpecifier" ||
+  //             spec.type === "ImportDefaultSpecifier") &&
+  //           spec.local.name === name
+  //       )
+  //   );
+  // }
   //Check if the file is a ESM file(Deprecated, because, babel plugin can't clearly detect ESM file)
   static isESM(state: babel.PluginPass): boolean {
     const sourceType = state.file?.opts.parserOpts?.sourceType;

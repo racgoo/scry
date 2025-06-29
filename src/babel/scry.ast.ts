@@ -371,6 +371,15 @@ class ScryAst {
     path: babel.NodePath<babel.types.Program>,
     esm: boolean
   ) {
+    const scryChecker = new ScryChecker(this.t);
+    const zoneJSImported = scryChecker.isImportedWithoutVariableDeclaration(
+      path,
+      "zone.js",
+      esm
+    );
+    if (zoneJSImported) {
+      return;
+    }
     if (esm) {
       //For esm target
       path.node.body.unshift(
@@ -393,6 +402,16 @@ class ScryAst {
     path: babel.NodePath<babel.types.Program>,
     esm: boolean
   ) {
+    const scryChecker = new ScryChecker(this.t);
+    const tracerImported = scryChecker.isImported(
+      path,
+      "Tracer",
+      "@racgoo/scry",
+      esm
+    );
+    if (tracerImported) {
+      return;
+    }
     if (esm) {
       path.node.body.unshift(
         this.t.importDeclaration(
@@ -432,6 +451,16 @@ class ScryAst {
     path: babel.NodePath<babel.types.Program>,
     esm: boolean
   ) {
+    const scryChecker = new ScryChecker(this.t);
+    const extractorImported = scryChecker.isImported(
+      path,
+      "Extractor",
+      "@racgoo/scry",
+      esm
+    );
+    if (extractorImported) {
+      return;
+    }
     if (esm) {
       //For esm target
       path.node.body.unshift(

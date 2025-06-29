@@ -1,5 +1,5 @@
 // ESM
-import { scryBabelPluginForESM } from "@racgoo/scry";
+import { scryBabelPluginForESM } from "@racgoo/scry/babel";
 export default {
   presets: [],
   plugins: [scryBabelPluginForESM],

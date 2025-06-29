@@ -82,8 +82,6 @@ function scryBabelPlugin(
           scryAst.createZoneRootInitialization(path);
           //Create trace context declare
           scryAst.createTraceConextDeclare(path);
-          //Add Zone.js initialization code
-          // scryAst.createInitailTraceZone(path);
           //Add Extractor import statement
           scryAst.createExtractorDeclaration(path, esm);
           //Add Tracer import statement
