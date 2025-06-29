@@ -92,7 +92,7 @@ yarn add @racgoo/scry
 Add the following plugin to your babel.config.js or .babelrc file
 
 ```jsx
-import { scryBabelPluginForESM, scryBabelPluginForCJS } from "@racgoo/scry";
+import { scryBabelPluginForESM, scryBabelPluginForCJS } from "@racgoo/scry/babel";
 //⚠️ Plugin setup may differ depending on the bundler you're using. ⚠️
 //If setting things up feels difficult, please refer to the "examples" in the GitHub repository.
 
@@ -105,7 +105,7 @@ In the case of Vite, which produces ESM-based output, you should use Babel plugi
 */
 
 import react from "@vitejs/plugin-react";
-import { scryBabelPlugin } from "@racgoo/scry";
+import { scryBabelPlugin } from "@racgoo/scry/babel";
 
 export default defineConfig({
   resolve: {
@@ -167,8 +167,14 @@ function bar(y: number) {
   return foo(y) + 1;
 }
 
-Tracer.start();
+Tracer.start("description_1");
+foo(2)
 bar(5);
+Tracer.end();
+
+Tracer.start("description_2");
+bar(7);
+foo(10)
 Tracer.end();
 ```
 
@@ -192,9 +198,9 @@ error handling and clearer error messages are currently under development.😅
 
 ### 🔧 Bugs 
 ##### Function, Class source code extracting is not working..(fixed)
-##### Trace.start() ~~ Trace.end() pattern cannot be twice in runtime..(fixing)
+##### Trace.start() ~~ Trace.end() pattern cannot be twice in runtime..(fixed)
 
-#### Don't worry about them~ I'll fix it :)
+
 believe me!
 
 ---
@@ -205,7 +211,8 @@ This project uses the following third-party packages:
 
 - [Day.js](https://github.com/iamkun/dayjs) - MIT License
 - [Zone.js](https://github.com/angular/angular) - MIT License
-
+- [flatted](https://github.com/WebReflection/flatted) - ISC License
+- [js-base64](https://github.com/dankogai/js-base64) - BSD-3-Clause License
 ---
 
 ### Contact
