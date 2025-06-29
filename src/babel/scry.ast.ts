@@ -11,8 +11,8 @@ import {
   PARENT_TRACE_ID_MARKER,
   ORIGINAL_CODE_START_MARKER,
   ORIGINAL_CODE_END_MARKER,
-  // ACTIVE_TRACE_ID_SET,
 } from "./scry.constant.js";
+import { TraceEventType } from "../tracer/record/type.js";
 
 //AST generators for scry babel plugin
 class ScryAst {
@@ -21,65 +21,89 @@ class ScryAst {
     this.t = t;
   }
 
-  public createParentTraceIdOptionalUpdater(
-    path: babel.NodePath<babel.types.Node>
-  ) {
-    const parentTraceIdIdentifier = (() => {
-      const fnPath = path.findParent(
-        (p) =>
-          p.isFunctionDeclaration() ||
-          p.isFunctionExpression() ||
-          p.isArrowFunctionExpression() ||
-          p.isClassMethod() ||
-          p.isObjectMethod()
-      );
-      if (!fnPath) {
-        return null;
-      }
-      const fnNode = fnPath.node;
-      const body = (
-        (fnNode as { body: babel.types.BlockStatement })
-          .body as babel.types.BlockStatement
-      ).body;
-      if (!body) return null;
-      const targetNode = body.find((stmt: babel.types.Node) => {
-        return (
-          this.t.isVariableDeclaration(stmt) &&
-          this.t.isStringLiteral(stmt.declarations[0].init) &&
-          stmt.declarations[0].init.value === PARENT_TRACE_ID_MARKER
-        );
-      });
-      if (targetNode) {
-        return (targetNode as babel.types.VariableDeclaration).declarations[0]
-          .id;
-      } else {
-        return null;
-      }
-    })();
+  public createTraceContextOptionalUpdater() {
+    return this.t.blockStatement([
+      this.t.ifStatement(
+        this.t.binaryExpression(
+          "===",
+          this.t.optionalMemberExpression(
+            this.t.identifier(ScryAstVariable.traceContext),
+            this.t.identifier(ScryAstVariable.traceBundleId),
+            false,
+            true // optional chaining
+          ),
+          this.t.nullLiteral()
+        ),
 
-    if (!parentTraceIdIdentifier) return this.t.emptyStatement();
-    return this.t.ifStatement(
-      this.t.binaryExpression(
-        "===",
-        parentTraceIdIdentifier as babel.types.Expression,
-        this.t.stringLiteral(PARENT_TRACE_ID_MARKER)
+        this.t.blockStatement([
+          this.t.expressionStatement(
+            this.t.assignmentExpression(
+              "=",
+              this.t.identifier(ScryAstVariable.traceContext),
+              this.t.memberExpression(
+                this.t.memberExpression(
+                  this.t.memberExpression(
+                    this.t.identifier("Zone"),
+                    this.t.identifier("current")
+                  ),
+                  this.t.identifier(ScryAstVariable._properties)
+                ),
+                this.t.stringLiteral(ScryAstVariable.traceContext),
+                true
+              )
+            )
+          ),
+        ])
       ),
-      this.t.blockStatement([
-        this.t.expressionStatement(
-          this.t.assignmentExpression(
-            "=",
-            parentTraceIdIdentifier,
+      this.t.ifStatement(
+        this.t.binaryExpression(
+          "!==",
+          this.t.memberExpression(
             this.t.memberExpression(
               this.t.memberExpression(
-                this.t.identifier("Zone"),
-                this.t.identifier("current")
+                this.t.memberExpression(
+                  this.t.identifier("Zone"),
+                  this.t.identifier("current")
+                ),
+                this.t.identifier(ScryAstVariable._properties)
               ),
-              this.t.identifier("name")
-            )
+              this.t.stringLiteral(ScryAstVariable.traceContext),
+              true
+            ),
+            this.t.identifier(ScryAstVariable.traceBundleId)
+          ),
+          this.t.memberExpression(
+            this.t.identifier(ScryAstVariable.traceContext),
+            this.t.identifier(ScryAstVariable.traceBundleId)
           )
         ),
-      ])
-    );
+        this.t.blockStatement([
+          this.t.expressionStatement(
+            this.t.assignmentExpression(
+              "=",
+              this.t.memberExpression(
+                this.t.identifier(ScryAstVariable.traceContext),
+                this.t.identifier(ScryAstVariable.traceBundleId)
+              ),
+              this.t.memberExpression(
+                this.t.memberExpression(
+                  this.t.memberExpression(
+                    this.t.memberExpression(
+                      this.t.identifier("Zone"),
+                      this.t.identifier("current")
+                    ),
+                    this.t.identifier(ScryAstVariable._properties)
+                  ),
+                  this.t.stringLiteral(ScryAstVariable.traceContext),
+                  true
+                ),
+                this.t.identifier(ScryAstVariable.traceBundleId)
+              )
+            )
+          ),
+        ])
+      ),
+    ]);
   }
 
   public createParentTraceDeclare(
@@ -113,10 +137,55 @@ class ScryAst {
     }
   }
 
+  //Create trace context declare(on Program level)
+  public createTraceConextDeclare(
+    path: babel.NodePath<
+      | babel.types.Program
+      | babel.types.FunctionDeclaration
+      | babel.types.FunctionExpression
+      | babel.types.ArrowFunctionExpression
+      | babel.types.ObjectMethod
+      | babel.types.ClassMethod
+    >
+  ) {
+    const parentDecl = this.t.variableDeclaration("var", [
+      this.t.variableDeclarator(
+        this.t.identifier(ScryAstVariable.traceContext),
+        this.t.objectExpression([
+          this.t.objectProperty(
+            this.t.identifier(ScryAstVariable.parentTraceId),
+            this.t.nullLiteral()
+          ),
+          this.t.objectProperty(
+            this.t.identifier(ScryAstVariable.traceBundleId),
+            this.t.nullLiteral()
+          ),
+        ])
+      ),
+    ]);
+
+    if (path.isProgram()) {
+      //For Program level(Top level global variable)
+      (path.node.body as babel.types.Statement[]).unshift(parentDecl);
+      return;
+    } else {
+      //For other level(Function, Class, etc.)
+      const body = path.node.body as babel.types.BlockStatement;
+      if (!this.t.isBlockStatement(body)) {
+        path.node.body = this.t.blockStatement([this.t.returnStatement(body)]);
+      }
+      (path.node.body as babel.types.BlockStatement).body.unshift(parentDecl);
+    }
+  }
+
   public createCodeExtractor(
-    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
+    path: babel.NodePath<
+      babel.types.CallExpression | babel.types.NewExpression
+    >,
+    chained: boolean
   ) {
     const callee = path.node.callee;
+
     if (this.t.isMemberExpression(callee)) {
       return this.t.variableDeclaration("const", [
         this.t.variableDeclarator(
@@ -127,7 +196,15 @@ class ScryAst {
               this.t.identifier("extractCode")
             ),
             [
-              callee.object,
+              // this.t.identifier(callee),
+              // callee.object,
+              chained
+                ? this.t.memberExpression(
+                    this.t.identifier("globalThis"),
+                    this.t.identifier(ScryAstVariable.prevReturnValue)
+                  )
+                : callee.object,
+              // this.t.stringLiteral(originCode),
               this.t.stringLiteral(
                 this.t.isIdentifier(callee.property) ? callee.property.name : ""
               ),
@@ -148,6 +225,7 @@ class ScryAst {
             [
               this.t.nullLiteral(),
               this.t.nullLiteral(),
+              // this.t.stringLiteral(originCode),
               callee as babel.types.Identifier,
             ]
           )
@@ -155,27 +233,6 @@ class ScryAst {
       ]);
     }
   }
-  // public createCodeExtractor() {
-  //   return this.t.variableDeclaration("const", [
-  //     this.t.variableDeclarator(
-  //       this.t.identifier("code"),
-  //       this.t.objectExpression([
-  //         this.t.objectProperty(
-  //           this.t.identifier("classCode"),
-  //           this.t.stringLiteral("")
-  //         ),
-  //         this.t.objectProperty(
-  //           this.t.identifier("functionCode"),
-  //           this.t.stringLiteral("")
-  //         ),
-  //         this.t.objectProperty(
-  //           this.t.identifier("methodCode"),
-  //           this.t.stringLiteral("")
-  //         ),
-  //       ])
-  //     ),
-  //   ]);
-  // }
 
   public preProcess(
     path: babel.NodePath<
@@ -199,6 +256,7 @@ class ScryAst {
       path.skip();
       return;
     }
+    //Extract code from location
     scryAst.createOriginCodeString(path, code);
   }
 
@@ -244,39 +302,26 @@ class ScryAst {
     path: babel.NodePath<babel.types.Program>
   ) {
     path.node.body.unshift(
-      this.t.addComment(
-        this.t.ifStatement(
-          this.t.unaryExpression(
-            "!",
+      this.t.blockStatement([
+        this.t.expressionStatement(
+          this.t.assignmentExpression(
+            "=",
             this.t.memberExpression(
               this.t.memberExpression(
                 this.t.identifier("Zone"),
                 this.t.identifier("root")
               ),
-              this.t.stringLiteral(ACTIVE_TRACE_ID_SET),
-              true // computed: Zone.root["activeTraceIdSet"]
-            )
-          ),
-          this.t.blockStatement([
-            this.t.expressionStatement(
-              this.t.assignmentExpression(
-                "=",
-                this.t.memberExpression(
-                  this.t.memberExpression(
-                    this.t.identifier("Zone"),
-                    this.t.identifier("root")
-                  ),
-                  this.t.stringLiteral(ACTIVE_TRACE_ID_SET),
-                  true
-                ),
-                this.t.newExpression(this.t.identifier("Set"), [])
-              )
+              this.t.identifier(ScryAstVariable._properties)
             ),
-          ])
+            this.t.objectExpression([
+              this.t.objectProperty(
+                this.t.identifier(ScryAstVariable.traceContext),
+                this.t.identifier(ScryAstVariable.traceContext)
+              ),
+            ])
+          )
         ),
-        "leading",
-        TRACE_MARKER
-      )
+      ])
     );
   }
 
@@ -322,10 +367,19 @@ class ScryAst {
   }
 
   //Add Zone.js import or require statement(on Program level)
-  public createDeclareZoneJS(
+  public createZoneJSDeclaration(
     path: babel.NodePath<babel.types.Program>,
     esm: boolean
   ) {
+    const scryChecker = new ScryChecker(this.t);
+    const zoneJSImported = scryChecker.isImportedWithoutVariableDeclaration(
+      path,
+      "zone.js",
+      esm
+    );
+    if (zoneJSImported) {
+      return;
+    }
     if (esm) {
       //For esm target
       path.node.body.unshift(
@@ -344,10 +398,69 @@ class ScryAst {
   }
 
   //Add Extractor import or require statement from @racgoo/scry(on Program level)
-  public createDeclareExtractor(
+  public createTracerDeclaration(
     path: babel.NodePath<babel.types.Program>,
     esm: boolean
   ) {
+    const scryChecker = new ScryChecker(this.t);
+    const tracerImported = scryChecker.isImported(
+      path,
+      "Tracer",
+      "@racgoo/scry",
+      esm
+    );
+    if (tracerImported) {
+      return;
+    }
+    if (esm) {
+      path.node.body.unshift(
+        this.t.importDeclaration(
+          [
+            this.t.importSpecifier(
+              this.t.identifier("Tracer"),
+              this.t.identifier("Tracer")
+            ),
+          ],
+          this.t.stringLiteral("@racgoo/scry")
+        )
+      );
+    } else {
+      //For commonjs target
+      path.node.body.unshift(
+        this.t.variableDeclaration("const", [
+          this.t.variableDeclarator(
+            this.t.objectPattern([
+              this.t.objectProperty(
+                this.t.identifier("Tracer"),
+                this.t.identifier("Tracer"),
+                false,
+                true
+              ),
+            ]),
+            this.t.callExpression(this.t.identifier("require"), [
+              this.t.stringLiteral("@racgoo/scry"),
+            ])
+          ),
+        ])
+      );
+    }
+  }
+
+  //Add Extractor import or require statement from @racgoo/scry(on Program level)
+  public createExtractorDeclaration(
+    path: babel.NodePath<babel.types.Program>,
+    esm: boolean
+  ) {
+    const scryChecker = new ScryChecker(this.t);
+    const extractorImported = scryChecker.isImported(
+      path,
+      "Extractor",
+      "@racgoo/scry",
+      esm
+    );
+    if (extractorImported) {
+      return;
+    }
     if (esm) {
       //For esm target
       path.node.body.unshift(
@@ -382,45 +495,6 @@ class ScryAst {
       );
     }
   }
-
-  //For next feature
-  // public createCodeExtractor(
-  //   path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
-  // ) {
-  //   const callee = path.node.callee;
-  //   if (this.t.isMemberExpression(callee)) {
-  //     return this.t.variableDeclaration("const", [
-  //       this.t.variableDeclarator(
-  //         this.t.identifier("code"),
-  //         this.t.callExpression(
-  //           this.t.memberExpression(
-  //             this.t.identifier("Extractor"),
-  //             this.t.identifier("extractCode")
-  //           ),
-  //           [
-  //             callee.object,
-  //             this.t.stringLiteral(
-  //               this.t.isIdentifier(callee.property) ? callee.property.name : ""
-  //             ),
-  //           ]
-  //         )
-  //       ),
-  //     ]);
-  //   } else {
-  //     return this.t.variableDeclaration("const", [
-  //       this.t.variableDeclarator(
-  //         this.t.identifier("code"),
-  //         this.t.callExpression(
-  //           this.t.memberExpression(
-  //             this.t.identifier("Extractor"),
-  //             this.t.identifier("extractFunction")
-  //           ),
-  //           [callee as babel.types.Identifier]
-  //         )
-  //       ),
-  //     ]);
-  //   }
-  // }
 
   //For debug(only dev)
   public createConsoleLog(identifier: string, flag: string) {
@@ -550,9 +624,11 @@ class ScryAst {
               "||",
               this.t.memberExpression(
                 this.t.identifier("Zone"),
-                //When async/await, ScryAstVariable.parentTraceId is used as closure variable
-                this.t.identifier(ScryAstVariable.parentTraceId),
-                true // Zone["test"]
+                this.t.memberExpression(
+                  this.t.identifier(ScryAstVariable.traceContext),
+                  this.t.identifier(ScryAstVariable.parentTraceId)
+                ),
+                true
               ),
               this.t.memberExpression(
                 this.t.identifier("Zone"),
@@ -571,118 +647,18 @@ class ScryAst {
                 this.t.identifier("properties"),
                 this.t.objectExpression([
                   this.t.objectProperty(
-                    this.t.identifier(ScryAstVariable.parentTraceId),
-                    this.t.identifier(ScryAstVariable.traceId)
+                    this.t.identifier(ScryAstVariable.traceContext),
+                    this.t.objectExpression([
+                      this.t.spreadElement(
+                        this.t.identifier(ScryAstVariable.traceContext)
+                      ),
+                      this.t.objectProperty(
+                        this.t.identifier(ScryAstVariable.parentTraceId),
+                        this.t.identifier(ScryAstVariable.traceId)
+                      ),
+                    ])
                   ),
                 ])
-              ),
-              this.t.objectProperty(
-                this.t.identifier("onInvoke"),
-                this.t.functionExpression(
-                  null,
-                  [
-                    this.t.identifier("parentZoneDelegate"),
-                    this.t.identifier("currentZone"),
-                    this.t.identifier("targetZone"),
-                    this.t.identifier("delegate"),
-                    this.t.identifier("applyThis"),
-                    this.t.identifier("args"),
-                    this.t.identifier("source"),
-                  ],
-                  this.t.blockStatement([
-                    this.t.expressionStatement(
-                      this.t.callExpression(
-                        this.t.identifier("queueMicrotask"),
-                        [
-                          this.t.functionExpression(
-                            null,
-                            [],
-                            this.t.blockStatement([
-                              this.t.expressionStatement(
-                                this.t.stringLiteral(
-                                  "This is only onHasTaskQueue Trigger(but now deprecated,do not works)"
-                                )
-                              ),
-                            ])
-                          ),
-                        ]
-                      )
-                    ),
-                    this.t.returnStatement(
-                      this.t.callExpression(
-                        this.t.memberExpression(
-                          this.t.identifier("parentZoneDelegate"),
-                          this.t.identifier("invoke")
-                        ),
-                        [
-                          this.t.identifier("targetZone"),
-                          this.t.identifier("delegate"),
-                          this.t.identifier("applyThis"),
-                          this.t.identifier("args"),
-                          this.t.identifier("source"),
-                        ]
-                      )
-                    ),
-                  ])
-                )
-              ),
-              this.t.objectProperty(
-                this.t.identifier("onHasTask"),
-                this.t.functionExpression(
-                  null,
-                  [
-                    this.t.identifier("delegate"),
-                    this.t.identifier("current"),
-                    this.t.identifier("target"),
-                    this.t.identifier("hasTaskState"),
-                  ],
-                  this.t.blockStatement([
-                    this.t.expressionStatement(
-                      this.t.callExpression(
-                        this.t.memberExpression(
-                          this.t.identifier("delegate"),
-                          this.t.identifier("hasTask")
-                        ),
-                        [
-                          this.t.identifier("target"),
-                          this.t.identifier("hasTaskState"),
-                        ]
-                      )
-                    ),
-                    this.t.variableDeclaration("const", [
-                      this.t.variableDeclarator(
-                        this.t.identifier("allDone"),
-                        this.t.logicalExpression(
-                          "&&",
-                          this.t.unaryExpression(
-                            "!",
-                            this.t.memberExpression(
-                              this.t.identifier("hasTaskState"),
-                              this.t.identifier("microTask")
-                            )
-                          ),
-                          this.t.logicalExpression(
-                            "&&",
-                            this.t.unaryExpression(
-                              "!",
-                              this.t.memberExpression(
-                                this.t.identifier("hasTaskState"),
-                                this.t.identifier("macroTask")
-                              )
-                            ),
-                            this.t.unaryExpression(
-                              "!",
-                              this.t.memberExpression(
-                                this.t.identifier("hasTaskState"),
-                                this.t.identifier("eventTask")
-                              )
-                            )
-                          )
-                        )
-                      ),
-                    ]),
-                  ])
-                )
               ),
             ]),
           ]
@@ -704,7 +680,10 @@ class ScryAst {
   //Update returnValue with origin execution(with zone.js new forked scope)
   //This manage Zone.root[ACTIVE_TRACE_ID_SET] = new Set() and delete traceId
   public craeteReturnValueUpdaterWithOriginExecution(
-    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
+    path: babel.NodePath<
+      babel.types.CallExpression | babel.types.NewExpression
+    >,
+    state: babel.PluginPass
   ) {
     //Get original call expression
     const originalCall = path.node;
@@ -752,24 +731,55 @@ class ScryAst {
                             this.t.arrowFunctionExpression(
                               [],
                               this.t.blockStatement([
-                                this.t.expressionStatement(
-                                  this.t.callExpression(
+                                this.t.variableDeclaration("let", [
+                                  this.t.variableDeclarator(
+                                    this.t.identifier(
+                                      ScryAstVariable.traceContext
+                                    ),
                                     this.t.memberExpression(
                                       this.t.memberExpression(
                                         this.t.memberExpression(
                                           this.t.identifier("Zone"),
-                                          this.t.identifier("root")
+                                          this.t.identifier("current")
                                         ),
-                                        this.t.stringLiteral(
-                                          ACTIVE_TRACE_ID_SET
-                                        ),
-                                        true
+                                        this.t.identifier(
+                                          ScryAstVariable._properties
+                                        )
                                       ),
-                                      this.t.identifier("delete")
-                                    ),
-                                    [this.t.identifier(ScryAstVariable.traceId)]
+                                      this.t.stringLiteral(
+                                        ScryAstVariable.traceContext
+                                      ),
+                                      true
+                                    )
+                                  ),
+                                ]),
+                                this.t.expressionStatement(
+                                  this.emitTraceEvent(
+                                    this.getEventDetail(path, state, {
+                                      type: "done",
+                                      fnName: this.getFunctionName(path),
+                                      chained: false,
+                                    })
                                   )
                                 ),
+                                // this.t.expressionStatement(
+                                //   this.t.callExpression(
+                                //     this.t.memberExpression(
+                                //       this.t.memberExpression(
+                                //         this.t.memberExpression(
+                                //           this.t.identifier("Zone"),
+                                //           this.t.identifier("root")
+                                //         ),
+                                //         this.t.stringLiteral(
+                                //           ACTIVE_TRACE_ID_SET
+                                //         ),
+                                //         true
+                                //       ),
+                                //       this.t.identifier("delete")
+                                //     ),
+                                //     [this.t.identifier(ScryAstVariable.traceId)]
+                                //   )
+                                // ),
                               ])
                             ),
                           ]
@@ -777,20 +787,29 @@ class ScryAst {
                       ),
                     ]),
                     this.t.blockStatement([
-                      this.t.expressionStatement(
-                        this.t.callExpression(
+                      this.t.variableDeclaration("let", [
+                        this.t.variableDeclarator(
+                          this.t.identifier(ScryAstVariable.traceContext),
                           this.t.memberExpression(
                             this.t.memberExpression(
                               this.t.memberExpression(
                                 this.t.identifier("Zone"),
-                                this.t.identifier("root")
+                                this.t.identifier("current")
                               ),
-                              this.t.stringLiteral(ACTIVE_TRACE_ID_SET),
-                              true
+                              this.t.identifier(ScryAstVariable._properties)
                             ),
-                            this.t.identifier("delete")
-                          ),
-                          [this.t.identifier(ScryAstVariable.traceId)]
+                            this.t.stringLiteral(ScryAstVariable.traceContext),
+                            true
+                          )
+                        ),
+                      ]),
+                      this.t.expressionStatement(
+                        this.emitTraceEvent(
+                          this.getEventDetail(path, state, {
+                            type: "done",
+                            fnName: this.getFunctionName(path),
+                            chained: false,
+                          })
                         )
                       ),
                     ])
@@ -842,7 +861,12 @@ class ScryAst {
           this.t.identifier("process"),
           this.t.identifier("emit")
         ),
-        [this.t.stringLiteral(TRACE_EVENT_NAME), detail]
+        [
+          this.t.stringLiteral(TRACE_EVENT_NAME),
+          this.t.objectExpression([
+            this.t.objectProperty(this.t.identifier("detail"), detail),
+          ]),
+        ]
       ),
       // Browser
       this.t.callExpression(
@@ -874,65 +898,129 @@ class ScryAst {
       chained: boolean;
     }
   ) {
-    return this.t.objectExpression([
-      this.t.objectProperty(
-        this.t.identifier(ScryAstVariable.type),
-        this.t.stringLiteral(info.type)
-      ),
-      this.t.objectProperty(
-        this.t.identifier(ScryAstVariable.name),
-        this.t.stringLiteral(info.fnName)
-      ),
-      this.t.objectProperty(
-        this.t.identifier(ScryAstVariable.classCode),
-        this.t.memberExpression(
-          this.t.identifier(ScryAstVariable.code),
-          this.t.identifier(ScryAstVariable.classCode)
-        )
-      ),
-      this.t.objectProperty(
-        this.t.identifier(ScryAstVariable.methodCode),
-        this.t.memberExpression(
-          this.t.identifier(ScryAstVariable.code),
-          this.t.identifier(ScryAstVariable.methodCode)
-        )
-      ),
-      this.t.objectProperty(
-        this.t.identifier(ScryAstVariable.functionCode),
-        this.t.memberExpression(
-          this.t.identifier(ScryAstVariable.code),
-          this.t.identifier(ScryAstVariable.functionCode)
-        )
-      ),
-      this.t.objectProperty(
-        this.t.identifier(ScryAstVariable.traceId),
-        this.t.identifier(ScryAstVariable.traceId)
-      ),
-      this.t.objectProperty(
-        this.t.identifier(ScryAstVariable.source),
-        this.getSource(path, state)
-      ),
-      this.t.objectProperty(
-        this.t.identifier(ScryAstVariable.returnValue),
-        info.type === "enter"
-          ? this.t.nullLiteral()
-          : this.t.identifier(ScryAstVariable.returnValue)
-      ),
-      this.t.objectProperty(
-        this.t.identifier(ScryAstVariable.chained),
-        this.t.booleanLiteral(info.chained)
-      ),
-      this.t.objectProperty(
-        this.t.identifier(ScryAstVariable.parentTraceId),
-        this.t.identifier(ScryAstVariable.parentTraceId) // 존재할 경우
-          ? this.t.identifier(ScryAstVariable.parentTraceId)
-          : this.t.identifier("undefined")
-      ),
-      this.t.objectProperty(
-        this.t.identifier(ScryAstVariable.args),
-        this.getArgs(path, state)
-      ),
-    ]);
+    if (info.type !== "done") {
+      return this.t.objectExpression([
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.traceBundleId),
+          this.t.memberExpression(
+            this.t.identifier(ScryAstVariable.traceContext),
+            this.t.identifier(ScryAstVariable.traceBundleId)
+          )
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.type),
+          this.t.stringLiteral(info.type)
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.name),
+          this.t.stringLiteral(info.fnName)
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.classCode),
+          this.t.memberExpression(
+            this.t.identifier(ScryAstVariable.code),
+            this.t.identifier(ScryAstVariable.classCode)
+          )
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.methodCode),
+          this.t.memberExpression(
+            this.t.identifier(ScryAstVariable.code),
+            this.t.identifier(ScryAstVariable.methodCode)
+          )
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.functionCode),
+          this.t.memberExpression(
+            this.t.identifier(ScryAstVariable.code),
+            this.t.identifier(ScryAstVariable.functionCode)
+          )
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.traceId),
+          this.t.identifier(ScryAstVariable.traceId)
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.source),
+          this.getSource(path, state)
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.returnValue),
+          info.type === "enter"
+            ? this.t.nullLiteral()
+            : this.t.identifier(ScryAstVariable.returnValue)
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.chained),
+          this.t.booleanLiteral(info.chained)
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.parentTraceId),
+          this.t.memberExpression(
+            this.t.identifier(ScryAstVariable.traceContext),
+            this.t.identifier(ScryAstVariable.parentTraceId)
+          )
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.args),
+          this.getArgs(path, state)
+        ),
+      ]);
+    } else {
+      return this.t.objectExpression([
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.traceBundleId),
+          this.t.memberExpression(
+            this.t.identifier(ScryAstVariable.traceContext),
+            this.t.identifier(ScryAstVariable.traceBundleId)
+          )
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.type),
+          this.t.stringLiteral(info.type)
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.name),
+          this.t.stringLiteral(info.fnName)
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.classCode),
+          this.t.stringLiteral("")
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.methodCode),
+          this.t.stringLiteral("")
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.functionCode),
+          this.t.stringLiteral("")
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.traceId),
+          this.t.identifier(ScryAstVariable.traceId)
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.source),
+          this.t.stringLiteral("")
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.returnValue),
+          this.t.nullLiteral()
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.chained),
+          this.t.booleanLiteral(false)
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.parentTraceId),
+          this.t.stringLiteral("")
+        ),
+        this.t.objectProperty(
+          this.t.identifier(ScryAstVariable.args),
+          this.t.arrayExpression([])
+        ),
+      ]);
+    }
   }
 
   //Get function name as string

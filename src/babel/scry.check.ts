@@ -1,12 +1,7 @@
 import * as babel from "@babel/core";
 import { Environment } from "../utils/enviroment.js";
 import Extractor from "../utils/extractor.js";
-import {
-  ACTIVE_TRACE_ID_SET,
-  DEVELOPMENT_MODE,
-  TRACE_MARKER,
-  TRACE_ZONE,
-} from "./scry.constant.js";
+import { DEVELOPMENT_MODE, TRACE_MARKER, TRACE_ZONE } from "./scry.constant.js";
 
 //Checkers for scry babel plugin
 class ScryChecker {
@@ -14,6 +9,120 @@ class ScryChecker {
   constructor(t: typeof babel.types) {
     this.t = t;
   }
+
+  //Check if the function is imported without variable declaration(ex, import "@racgoo/scry")
+  public isImportedWithoutVariableDeclaration(
+    path: babel.NodePath<babel.types.Program>,
+    source: string,
+    esm: boolean
+  ) {
+    if (esm) {
+      if (
+        path.node.body.some(
+          (node) =>
+            node.type === "ImportDeclaration" &&
+            node.source.value === source &&
+            node.specifiers.length === 0
+        )
+      ) {
+        return true;
+      }
+    } else {
+      if (
+        path.node.body.some(
+          (node) =>
+            node.type === "ExpressionStatement" &&
+            node.expression.type === "CallExpression" &&
+            node.expression.callee.type === "Identifier" &&
+            node.expression.callee.name === "require" &&
+            node.expression.arguments.length > 0 &&
+            node.expression.arguments[0].type === "StringLiteral" &&
+            node.expression.arguments[0].value === source
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  //Check if the function is imported
+  public isImported(
+    path: babel.NodePath<babel.types.Program>,
+    name: string,
+    source: string,
+    esm: boolean
+  ) {
+    let imported;
+    if (esm) {
+      //Check is imported
+      imported = path.node.body.some(
+        (node) =>
+          node.type === "ImportDeclaration" &&
+          node.source.value === source &&
+          node.specifiers.some(
+            (spec) =>
+              spec.type === "ImportSpecifier" &&
+              spec.imported.type === "Identifier" &&
+              spec.imported.name === name
+          )
+      );
+    } else {
+      //Check is required
+      imported = path.node.body.some(
+        (node) =>
+          node.type === "VariableDeclaration" &&
+          node.declarations.some((decl) => {
+            if (
+              decl.init &&
+              decl.init.type === "CallExpression" &&
+              decl.init.callee.type === "Identifier" &&
+              decl.init.callee.name === "require" &&
+              decl.init.arguments.length > 0 &&
+              decl.init.arguments[0].type === "StringLiteral" &&
+              decl.init.arguments[0].value === source
+            ) {
+              // 구조분해 할당인지 확인
+              if (
+                decl.id.type === "ObjectPattern" &&
+                decl.id.properties.some(
+                  (prop) =>
+                    prop.type === "ObjectProperty" &&
+                    prop.key.type === "Identifier" &&
+                    prop.key.name === name
+                )
+              ) {
+                return true;
+              }
+              if (decl.id.type === "Identifier") {
+                return true;
+              }
+            }
+            return false;
+          })
+      );
+    }
+    return imported;
+  }
+
+  //Check if the file is imported
+  // public isImported(
+  //   path: babel.NodePath<babel.types.Program>,
+  //   name: string,
+  //   source: string
+  // ) {
+  //   return path.node.body.some(
+  //     (node) =>
+  //       node.type === "ImportDeclaration" &&
+  //       node.source.value === source &&
+  //       node.specifiers.some(
+  //         (spec) =>
+  //           (spec.type === "ImportSpecifier" ||
+  //             spec.type === "ImportDefaultSpecifier") &&
+  //           spec.local.name === name
+  //       )
+  //   );
+  // }
   //Check if the file is a ESM file(Deprecated, because, babel plugin can't clearly detect ESM file)
   static isESM(state: babel.PluginPass): boolean {
     const sourceType = state.file?.opts.parserOpts?.sourceType;
@@ -61,6 +170,18 @@ class ScryChecker {
     );
   }
 
+  public isExtractorMethod(
+    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
+  ) {
+    const callee = path.node.callee;
+    return (
+      this.t.isMemberExpression(callee) &&
+      this.t.isIdentifier(callee.object) &&
+      callee.object.name === "Extractor" &&
+      this.t.isIdentifier(callee.property, { name: "extractCode" })
+    );
+  }
+
   //Check if the function is a Zone.root[ACTIVE_TRACE_ID_SET] = new Set() initialization
   public isZoneRootActiveTraceSetInit(
     path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
@@ -77,9 +198,9 @@ class ScryChecker {
         this.t.isIdentifier(parent.node.left.object.property, {
           name: "root",
         }) &&
-        this.t.isStringLiteral(parent.node.left.property, {
-          value: ACTIVE_TRACE_ID_SET,
-        }) &&
+        // this.t.isStringLiteral(parent.node.left.property, {
+        //   value: ACTIVE_TRACE_ID_SET,
+        // }) &&
         parent.node.left.computed
       ) {
         parent.skip();

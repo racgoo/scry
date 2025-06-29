@@ -1,10 +1,15 @@
 // scripts/fix-cjs.js
 import fs from "fs";
+import path from "path";
 import pkg from "glob";
 const { glob } = pkg;
 
-// 1. 파일 확장자 변경
-const files = glob.sync("dist/cjs/**/*.js");
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const files = glob.sync(path.resolve(__dirname, "../dist/cjs/**/*.js"));
 files.forEach((file) => {
   // 2. import문의 확장자도 수정
   let content = fs.readFileSync(file, "utf8");

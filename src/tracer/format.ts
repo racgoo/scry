@@ -1,5 +1,6 @@
 import { Environment } from "../utils/enviroment.js";
 import dayjs from "dayjs";
+import { TraceNode } from "./node/type.js";
 
 //data formatter for trace result(Made by claude:))
 class Format {
@@ -22,6 +23,7 @@ class Format {
 
   //Generate html root for trace result(zip all trace result)
   static generateHtmlRoot(
+    description: string,
     traceNodes: TraceNode[],
     startTime: dayjs.Dayjs,
     duration: number
@@ -585,6 +587,13 @@ class Format {
               </h1>
               <div class="subtitle">Visualize your code's execution journey with precision and elegance</div>
               <div class="subtitle">The following output is displayed in a directory-like structure, representing the execution order of functions and the execution context at the scope level.</div>
+              <div class="subtitle" style="margin-top:0.5rem; color:var(--primary-light); font-weight:600;">
+                ${
+                  description
+                    ? `📝 <span style="font-weight:500">${description}</span>`
+                    : ""
+                }
+              </div>
               <div class="time-info">
                 <div class="time-item">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -670,6 +679,7 @@ class Format {
 
             function generateHtmlContent(node) {
               const callType = node.classCode ? "method" : "function";
+              console.log(node)
               return \`
                 <div class="trace-info">
                   <div class="detail-header">
@@ -909,166 +919,6 @@ class Format {
       .filter((node) => !node.parent)
       .map((node) => renderNode(node))
       .join("")}</div>`;
-  }
-
-  //Generate execution detail html
-  static generateHtmlContent(node: TraceNode): string {
-    const callType = node.classCode ? "method" : "function";
-    return `
-      <div class="trace-info">
-        <div class="detail-header">
-          <div class="detail-title">
-            <h1 class="function-name">${node.name}</h1>
-            <div class="function-meta">
-              <div class="meta-badges">
-                <span class="badge call-type">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M20 12V8H6a2 2 0 100 4h14v-4M20 12v4H6a2 2 0 110-4h14v4" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  ${callType}
-                </span>
-                <span class="badge status-badge ${
-                  node.errored ? "error" : "success"
-                }">
-                  ${
-                    node.errored
-                      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" stroke-width="2"/><path d="M12 8v4M12 16h.01" stroke-width="2"/></svg>'
-                      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" stroke-width="2"/><path d="M8 12l2 2 4-4" stroke-width="2"/></svg>'
-                  }
-                  ${node.errored ? "Failed" : "Success"}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="content">
-          <div class="section" style="--animation-order: 1">
-            <div class="section-header">
-              <div class="section-title">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M8 3H7a2 2 0 00-2 2v5a2 2 0 01-2 2 2 2 0 012 2v5c0 1.1.9 2 2 2h1M16 3h1a2 2 0 012 2v5a2 2 0 002 2 2 2 0 00-2 2v5a2 2 0 01-2 2h-1" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                ${
-                  callType === "method"
-                    ? "Method Definition"
-                    : "Function Definition"
-                }
-              </div>
-            </div>
-            <div class="section-content">
-              <pre><code class="language-javascript">${
-                node.methodCode ||
-                node.functionCode ||
-                "Source code not available"
-              }</code></pre>
-            </div>
-          </div>
-          
-          ${
-            node.classCode
-              ? `
-            <div class="section" style="--animation-order: 2">
-              <div class="section-header">
-                <div class="section-title">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  Class Definition
-                </div>
-              </div>
-              <div class="section-content">
-                <pre><code class="language-javascript">${node.classCode}</code></pre>
-              </div>
-            </div>
-          `
-              : ""
-          }
-          
-          <div class="section" style="--animation-order: 3">
-            <div class="section-header">
-              <div class="section-title">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M22 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/>
-                  <circle cx="12" cy="10" r="3" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                Arguments
-              </div>
-            </div>
-            <div class="section-content">
-              <pre><code class="language-json">${Format.parseJson(
-                node.args
-              )}</code></pre>
-            </div>
-          </div>
-          
-          <div class="section" style="--animation-order: 4">
-            <div class="section-header">
-              <div class="section-title">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M5 12h14M12 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                Return Value
-              </div>
-            </div>
-            <div class="section-content">
-              <pre><code class="language-javascript">${Format.parseReturnValue(
-                node.returnValue
-              )}</code></pre>
-            </div>
-          </div>
-          
-          <div class="section" style="--animation-order: 5">
-            <div class="section-header">
-              <div class="section-title">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/>
-                  <circle cx="12" cy="10" r="3" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                Source Location
-              </div>
-            </div>
-            <div class="section-content source-content">
-              <span class="source-badge">${node.source}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  private static parseJson(value: unknown): string {
-    const seen = new WeakSet();
-    return JSON.stringify(value, (key, value) => {
-      if (key === "parent") return undefined;
-      if (!value || typeof value !== "object") return value;
-      if (seen.has(value))
-        return `[Circular ${value.constructor?.name || "Object"}]`;
-      seen.add(value);
-
-      if (
-        value.constructor?.name === "Timeout" ||
-        value.constructor?.name === "TimersList" ||
-        key === "_idleNext" ||
-        key === "_idlePrev"
-      ) {
-        return "[Timer Object]";
-      }
-
-      if (
-        value.constructor?.name?.includes("Zone") ||
-        key.includes("zone") ||
-        key.includes("Zone")
-      ) {
-        return "[Zone Object]";
-      }
-
-      if (!Array.isArray(value) && "name" in value && "traceId" in value) {
-        (value as any).html = Format.generateHtmlContent(value as TraceNode);
-      }
-
-      return value;
-    });
   }
 
   private static parseReturnValue(value: unknown): string {

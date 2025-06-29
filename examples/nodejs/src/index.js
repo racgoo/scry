@@ -5,8 +5,13 @@ import { classTest, asyncTest, syncTest } from "./mjs-test.js";
 // const { Tracer } = require("@racgoo/scry");
 // const { classTest, asyncTest, syncTest } = require("./cjs-test.js");
 
-Tracer.start();
-asyncTest();
-syncTest();
-classTest();
-Tracer.end();
+async function test() {
+  Tracer.start("First");
+  syncTest();
+  classTest();
+  Tracer.end();
+  Tracer.start("Second");
+  await asyncTest();
+  Tracer.end();
+}
+test();
