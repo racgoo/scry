@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { ExporterStrategyInterface } from "../interface.js";
+import { RuntimeStrategyInterface } from "../interface.js";
 import fs from "fs";
 import {
   REPORT_DIR,
@@ -9,9 +9,7 @@ import {
   TRACE_RESULT_FILE_NAME,
 } from "./constant.js";
 
-class NodeStrategy implements ExporterStrategyInterface {
-  constructor() {}
-
+class NodeStrategy implements RuntimeStrategyInterface {
   public async openBrowser(filePathOrUrl: string) {
     const command =
       process.platform === "darwin"

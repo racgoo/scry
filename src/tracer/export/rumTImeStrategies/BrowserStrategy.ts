@@ -1,9 +1,7 @@
-import { ExporterStrategyInterface } from "../interface.js";
+import { RuntimeStrategyInterface } from "../interface.js";
 import { BLOB_TYPE } from "./constant.js";
 
-class BrowserStrategy implements ExporterStrategyInterface {
-  constructor() {}
-
+class BrowserStrategy implements RuntimeStrategyInterface {
   public async openBrowser(filePathOrUrl: string) {
     window.open(filePathOrUrl, "_blank");
   }

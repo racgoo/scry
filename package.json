@@ -26,7 +26,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "npm run build:esm && npm run build:cjs",
+    "inject-webui": "node scripts/embad-webui.js",
+    "build": "npm run build:esm && npm run build:cjs && node scripts/embad-webui.js",
     "build:esm": "tsc -p configs/tsconfig.esm.json",
     "build:cjs": "tsc -p configs/tsconfig.cjs.json && node scripts/fix-cjs.js",
     "test": "jest",
@@ -62,10 +63,13 @@
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
     "tsc-alias": "^1.8.16",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vite": "^7.0.0"
   },
   "dependencies": {
     "dayjs": "^1.11.13",
+    "flatted": "3.3.3",
+    "js-base64": "^3.7.7",
     "zone.js": "^0.15.1"
   }
 }

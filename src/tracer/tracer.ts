@@ -1,6 +1,6 @@
 import "zone.js";
 import dayjs from "dayjs";
-import Format from "./format.js";
+// import Format from "./format.js";
 import { Output } from "../utils/output.js";
 import { TraceNode } from "./node/type.js";
 import { TraceRecorder, TraceRecorderInterface } from "./record/index.js";
@@ -9,7 +9,8 @@ import { ZoneContext, ZoneContextInterface } from "./zone/index.js";
 import { TracerOption } from "./type.js";
 import { ExporterInterface } from "./export/interface.js";
 import { Exporter } from "./export/exporter.js";
-
+import { Transformer } from "../utils/transformer.js";
+import Format from "./format.js";
 //Tracer class. for single instance.
 class Tracer {
   //Recorder for trace details(emitted by babel plugin code)
@@ -82,6 +83,9 @@ class Tracer {
         this.recorder.getBundleMap().get(endBundleId)!.startTime,
         "ms"
       );
+
+      console.log(Transformer.deserialize(Transformer.serialize(traceNodes)));
+
       //Generate html root for Display UI(HTML)
       const htmlRoot = Format.generateHtmlRoot(
         this.recorder.getBundleMap().get(endBundleId)!.description,
@@ -90,7 +94,7 @@ class Tracer {
         this.recorder.getBundleMap().get(endBundleId)!.duration
       );
       //Export html
-      this.exporter.exportHtml(htmlRoot);
+      this.exporter.exportToHtml(htmlRoot);
     });
   }
 

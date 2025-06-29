@@ -1,18 +1,24 @@
-import { Environment } from "./enviroment.js";
+import { encode, decode } from "js-base64";
+import * as flatted from "flatted";
 
 //Transformer class. for single instance.
 class Transformer {
-  //Convert string to base64
   static toBase64(str: string): string {
-    return Environment.isNodeJS()
-      ? //Use Buffer.from() for node.js
-        Buffer.from(str).toString("base64")
-      : //Browser inner function ?? btoa cannot handle korean.. i need to learn this.
-        btoa(
-          encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) =>
-            String.fromCharCode(parseInt(p1, 16))
-          )
-        );
+    return encode(str);
+  }
+
+  static fromBase64(str: string): string {
+    return decode(str);
+  }
+
+  //Serialize(Circular JSON is ok )
+  static serialize(obj: any): string {
+    return this.toBase64(flatted.stringify(obj));
+  }
+
+  //Deserialize(Circular JSON is ok )
+  static deserialize<T>(str: string): T {
+    return flatted.parse(this.fromBase64(str)) as T;
   }
 }
 
