@@ -3,7 +3,7 @@
 # **JavaScript/TypeScript execution flow tracker**
 
 <div align="center">
-  <img src="https://img.shields.io/badge/version-0.0.42-blue.svg" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-0.0.44-blue.svg" alt="Version"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/>
 </div>
@@ -47,7 +47,9 @@ Scry helps you clearly understand complex code flow and analyze relationships be
 
 - Full recording of function and method calls, including input and output values
 
-- Automatic tracking of function names and call stacks
+- Automatically tracks function names and call stacks, grouping them by execution context.
+Even in chained calls like test().test(), each call is recognized and grouped together, preserving the chaining structure.
+It also fully supports asynchronous contexts, allowing seamless tracking across async/await, .then(), and callbacks.
 
 - Compatible with both Node.js and browser environments.
 In the browser, trace results are displayed directly in the console with a clickable link that opens the visual report in a new tab.
@@ -130,7 +132,7 @@ However, when using Babel, you must choose and apply ESM or CJS-specific plugins
 */
 
 1. ESM module system.(package.json.type === "module")
-import { scryBabelPluginESM } from "@racgoo/scry"; 
+import { scryBabelPluginESM } from "@racgoo/scry/babel"; 
 export default {
   presets: [],
   plugins: [scryBabelPluginESM], 
@@ -182,13 +184,7 @@ Tracer.end();
 
 ### 🔧 Future Work
 
-#### Enhanced Parameter & Return Type Tracking
 
-Further improvements are underway to better validate and track function parameters and return values, especially for complex nodes such as `BinaryExpression`, `CallExpression`, and others.
-
-#### Async Function Support(Experimental Support)
-
-All done!. but it needs some feedback:)
 
 #### Improved error messaging
 
