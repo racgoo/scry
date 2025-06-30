@@ -3,13 +3,26 @@ import ScryAst from "./scry.ast.js";
 import ScryChecker from "./scry.check.js";
 import { ScryAstVariable, TRACE_MARKER } from "./scry.constant.js";
 
+const EXCLUDED_LIBS = [
+  "node_modules/zone.js",
+  "node_modules/@racgoo/scry",
+  "node_modules/flatted",
+  "node_modules/js-base64",
+];
+
 function scryBabelPlugin(
   { types: t }: { types: typeof babel.types },
   type: "cjs" | "esm" //Output type
 ) {
   // Pre process for origin code comment(but it must be done in visitor)
   const pre = function (this: babel.PluginPass) {
-    if (ScryChecker.isNodeModule(this)) return;
+    if (
+      this.filename &&
+      EXCLUDED_LIBS.some((lib) => this.filename?.includes(lib))
+    ) {
+      return; // 지정한 라이브러리만 변환하지 않음
+    }
+
     try {
       if (this.file && this.file.path) {
         //Origin code
@@ -75,9 +88,14 @@ function scryBabelPlugin(
         state: babel.PluginPass
       ) {
         try {
+          //check if the file is excluded
+          const scryChecker = new ScryChecker(t);
+          if (scryChecker.isExcluded(state, EXCLUDED_LIBS)) {
+            return;
+          }
+
           const esm = type === "esm";
           const scryAst = new ScryAst(t);
-          if (ScryChecker.isNodeModule(state)) return;
           // Add Zone.root initialization code if not initialized
           scryAst.createZoneRootInitialization(path);
           //Create trace context declare
@@ -157,6 +175,12 @@ function scryBabelPlugin(
         state: babel.PluginPass
       ) {
         try {
+          //check if the file is excluded
+          const scryChecker = new ScryChecker(t);
+          if (scryChecker.isExcluded(state, EXCLUDED_LIBS)) {
+            return;
+          }
+          //AST transform
           transformCall(path, state, t);
         } catch (error) {
           console.error("Babel plugin error:", error);
@@ -245,16 +269,7 @@ function scryBabelPlugin(
           scryAst.createTraceContextOptionalUpdater(),
           //Extract code from location
           scryAst.createCodeExtractor(path, chained),
-          //Generate 'enter' event
-          t.expressionStatement(
-            scryAst.emitTraceEvent(
-              scryAst.getEventDetail(path, state, {
-                type: "enter",
-                fnName,
-                chained,
-              })
-            )
-          ),
+
           //Create returnValue
           scryAst.createReturnValueDeclaration(),
           //Create new trace-zone based on current trace-id forked with parent traceId
@@ -262,7 +277,7 @@ function scryBabelPlugin(
           //Create Declare traceZone
           scryAst.createDeclareTraceZoneWithTraceId(),
           //Update returnValue with origin execution(With zone.js scope)
-          scryAst.craeteReturnValueUpdaterWithOriginExecution(path, state),
+          scryAst.craeteOriginCallExecutor(path, state, chained),
           t.expressionStatement(
             t.assignmentExpression(
               "=",
@@ -274,6 +289,7 @@ function scryBabelPlugin(
             )
           ),
           //Generate 'exit' event
+          //hmm,, under code can be hidden in "craeteOriginCallExecutor"
           t.expressionStatement(
             scryAst.emitTraceEvent(
               scryAst.getEventDetail(path, state, {

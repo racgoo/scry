@@ -58,4 +58,8 @@ export const ScryAstVariable = {
   _properties: "_properties",
   //prevReturnValue(for chained function, in case of method1().method2(), method1() is memorized as prevReturnValue)
   prevReturnValue: "prevReturnValue",
+  //originalCallReturnValue(return value of original call)
+  originalCallReturnValue: "originalCallReturnValue",
+  //processedArgs(args after spread). memorize origin call arguments
+  processedArgs: "processedArgs",
 };
