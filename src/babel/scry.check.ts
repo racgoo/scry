@@ -10,6 +10,12 @@ class ScryChecker {
     this.t = t;
   }
 
+  //Check if the file is excluded
+  public isExcluded(state: babel.PluginPass, excludedLibs: string[]) {
+    const filePath = state?.filename || "";
+    return excludedLibs.some((lib) => filePath.includes(lib));
+  }
+
   //Check if the function is imported without variable declaration(ex, import "@racgoo/scry")
   public isImportedWithoutVariableDeclaration(
     path: babel.NodePath<babel.types.Program>,

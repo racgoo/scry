@@ -6,7 +6,7 @@ export default {
 };
 
 // CJS;
-// const { scryBabelPluginForCJS } = require("@racgoo/scry");
+// const { scryBabelPluginForCJS } = require("@racgoo/scry/babel");
 // module.exports = {
 //   presets: [],
 //   plugins: [scryBabelPluginForCJS],

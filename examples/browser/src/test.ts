@@ -1,7 +1,7 @@
 import { Tracer } from "@racgoo/scry";
 
 async function asyncTest1(flag: string) {
-  console.log("asyncTest", flag);
+  console.log(20 + "10", flag);
   await asyncTest2(flag + ":await1");
   asyncTest2(flag + ":then1").then((res) => {
     console.log(res);
@@ -15,16 +15,17 @@ async function asyncTest2(flag: string) {
   return new Promise((resolve) => setTimeout(() => resolve(flag), 1000));
 }
 
-const syncTest1 = () => {
-  console.log("syncTest1");
+const syncTest1 = (value: string) => {
+  const test = value + "syncTest1";
+  console.log(test);
 };
-const syncTest2 = () => {
-  console.log("syncTest2");
+const syncTest2 = (value: string) => {
+  console.log(value + "syncTest2");
 };
 
 export const syncTest = (value: number) => {
-  syncTest1();
-  syncTest2();
+  syncTest1("1");
+  syncTest2("2");
   return value;
 };
 
