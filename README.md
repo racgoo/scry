@@ -3,7 +3,7 @@
 # **JavaScript/TypeScript execution flow tracker**
 
 <div align="center">
-  <img src="https://img.shields.io/badge/version-0.0.44-blue.svg" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-0.0.45-blue.svg" alt="Version"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/>
 </div>
