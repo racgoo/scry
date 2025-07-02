@@ -20,7 +20,7 @@ function scryBabelPlugin(
       this.filename &&
       EXCLUDED_LIBS.some((lib) => this.filename?.includes(lib))
     ) {
-      return; // 지정한 라이브러리만 변환하지 않음
+      return; //Skip if the file is excluded
     }
 
     try {
@@ -314,7 +314,23 @@ function scryBabelPlugin(
     path.replaceWith(newNode);
     path.skip();
   }
-  return { visitor, pre };
+
+  const post = function (this: babel.PluginPass) {
+    //All files are processed(it is not necessary to check if the file is excluded, Tracer needs it)
+    try {
+      if (this.file && this.file.path) {
+        const scryAst = new ScryAst(t);
+        //Add plugin applied variable to the end of the file(it is hoisted)
+        this.file.path.node.body.unshift(
+          t.expressionStatement(scryAst.createPluginAppliedVariable())
+        );
+      }
+    } catch (error) {
+      console.error("Babel plugin error:", error);
+    }
+  };
+
+  return { visitor, pre, post };
 }
 
 //For CJS output(CommonJS)

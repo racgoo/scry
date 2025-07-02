@@ -21,6 +21,18 @@ class ScryAst {
     this.t = t;
   }
 
+  public createPluginAppliedVariable() {
+    return this.t.assignmentExpression(
+      "=",
+      this.t.memberExpression(
+        this.t.identifier(ScryAstVariable.globalThis),
+        this.t.identifier(ScryAstVariable.pluginApplied),
+        false
+      ),
+      this.t.booleanLiteral(true)
+    );
+  }
+
   public createTraceContextOptionalUpdater() {
     return this.t.blockStatement([
       this.t.ifStatement(
@@ -200,7 +212,7 @@ class ScryAst {
               // callee.object,
               chained
                 ? this.t.memberExpression(
-                    this.t.identifier("globalThis"),
+                    this.t.identifier(ScryAstVariable.globalThis),
                     this.t.identifier(ScryAstVariable.prevReturnValue)
                   )
                 : callee.object,

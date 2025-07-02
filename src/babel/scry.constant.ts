@@ -62,4 +62,6 @@ export const ScryAstVariable = {
   originalCallReturnValue: "originalCallReturnValue",
   //processedArgs(args after spread). memorize origin call arguments
   processedArgs: "processedArgs",
-};
+  //plugin applied(for tracer, if plugin is applied, it's declared)
+  pluginApplied: "scryPluginApplied",
+} as const;
