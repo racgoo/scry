@@ -6,8 +6,13 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 //Custom lint plugin
-import boundaries from "eslint-plugin-boundaries";
+import importPlugin from "eslint-plugin-import";
 //need "eslint-import-resolver-typescript": "^4.4.4" as dev dependency
+const capsuredModuleAlias = ["features", "styles"];
+
+function getPatterns(alias) {
+  return [`@${alias}/*/*`, `*/${alias}/*/*`];
+}
 
 export default tseslint.config([
   globalIgnores(["dist"]),
@@ -27,22 +32,14 @@ export default tseslint.config([
       "import/resolver": {
         typescript: {}, //automatically insert resolver
       },
-      //Define boundaries to use
-      "boundaries/elements": [{ type: "features", pattern: "features/*" }],
     },
     //Isolate features folder lint rule
-    plugins: { boundaries },
+    plugins: { import: importPlugin },
     rules: {
-      "boundaries/entry-point": [
-        2, //Error flag(2: error, 1: warning, 0: off).. I think it's not good using error as number
+      "no-restricted-imports": [
+        "error",
         {
-          default: "disallow",
-          rules: [
-            {
-              target: ["features"],
-              allow: "index.ts", //Allow only index.ts file(Protect capsured module)
-            },
-          ],
+          patterns: capsuredModuleAlias.flatMap(getPatterns),
         },
       ],
     },

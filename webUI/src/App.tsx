@@ -1,14 +1,15 @@
 import { HashRouter, Routes, Route } from "react-router-dom";
+import TraceResult from "@pages/TraceResult";
+import typedRoute from "@routes/typedRoute";
 
-import Dummy from "./src/pages/dummy.js";
-import Dummy2 from "./src/pages/dummy2.js";
+import "./App.css";
 
 function App() {
   return (
     <HashRouter>
       <Routes>
-        <Route path="/" element={<Dummy />} />
-        <Route path="/dummy2" element={<Dummy2 />} />
+        <Route path={typedRoute.home} element={<TraceResult />} />
+        <Route path={typedRoute.traceResult} element={<TraceResult />} />
       </Routes>
     </HashRouter>
   );

@@ -87,6 +87,9 @@ class Tracer {
         "ms"
       );
 
+      //Export trace nodes
+      // this.exporter.export(traceNodes);
+
       //Generate html root for Display UI(HTML)
       const htmlRoot = Format.generateHtmlRoot(
         this.recorder.getBundleMap().get(endBundleId)!.description,
