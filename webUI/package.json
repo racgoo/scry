@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "eslint-plugin-boundaries": "^5.0.1",
     "flatted": "3.3.3",
     "js-base64": "^3.7.7",
     "react": "^19.1.0",
