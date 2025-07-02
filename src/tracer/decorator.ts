@@ -1,6 +1,6 @@
-import { ScryAstVariable } from "../babel/scry.constant";
-import { Output } from "../utils/output";
-import Tracer from "./tracer";
+import { ScryAstVariable } from "../babel/scry.constant.js";
+import { Output } from "../utils/output.js";
+import Tracer from "./tracer.js";
 
 //Decorator for method to check if plugin is applied
 function checkPlugin(
