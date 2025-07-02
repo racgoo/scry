@@ -1,6 +1,6 @@
 {
   "name": "@racgoo/scry",
-  "version": "0.0.44",
+  "version": "0.0.45",
   "description": "Trace your code with ease",
   "type": "module",
   "exports": {
