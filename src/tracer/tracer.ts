@@ -10,6 +10,8 @@ import { TracerOption } from "./type.js";
 import { ExporterInterface } from "./export/interface.js";
 import { Exporter } from "./export/exporter.js";
 import Format from "./format.js";
+import { checkPlugin } from "./decorator.js";
+
 //Tracer class. for single instance.
 class Tracer {
   //Recorder for trace details(emitted by babel plugin code)
@@ -29,6 +31,7 @@ class Tracer {
   };
 
   //Start tracing
+  @checkPlugin //Decorator for method to check if plugin is applied
   public start(description?: string) {
     //Check if tracing is already started
     if (this.currentOption.tracing) {
@@ -50,7 +53,8 @@ class Tracer {
     }
   }
   //End tracing
-  end() {
+  @checkPlugin //Decorator for method to check if plugin is applied
+  public end() {
     //Check if tracing is started
     if (!this.currentOption.tracing) {
       this.handleDuplicatedEnd();
