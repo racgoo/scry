@@ -5,9 +5,22 @@ import {
   ORIGINAL_CODE_START_MARKER,
 } from "../babel/scry.constant.js";
 
+type CodeResult = {
+  functionCode: string;
+  classCode: string;
+  methodCode: string;
+};
+
 //Extract code from instance and method(Runtime Extractor)
 class Extractor {
   constructor() {}
+
+  //Cache keyed by the function/constructor reference.
+  //WeakMap is used so cached entries are GC-eligible once the function object is no longer referenced.
+  //Calling func.toString() and splitting on marker strings on every invocation was the dominant
+  //per-call cost for frequently-called traced functions.
+  private static functionCache = new WeakMap<object, CodeResult>();
+  private static methodCache = new WeakMap<object, CodeResult>();
 
   //ExtractOriginCode
   private static extractOriginCode(tranfiledCode: string): string {
@@ -26,22 +39,33 @@ class Extractor {
     instance: { [key: string]: unknown } | null,
     method: string | null,
     func: typeof Function | null
-  ) {
-    const result = {
+  ): CodeResult {
+    const result: CodeResult = {
       functionCode: "",
       classCode: "",
       methodCode: "",
     };
+
     if (func) {
-      result.functionCode = this.extractOriginCode(func.toString());
+      if (this.functionCache.has(func as object)) {
+        return this.functionCache.get(func as object)!;
+      }
+      result.functionCode = this.extractOriginCode((func as unknown as { toString(): string }).toString());
+      this.functionCache.set(func as object, result);
     }
+
     if (this.isMethod(instance, method)) {
+      const ctor = instance!.constructor as object;
+      if (this.methodCache.has(ctor)) {
+        return this.methodCache.get(ctor)!;
+      }
       result.classCode = this.extractOriginCode(
         instance!.constructor.toString()
       );
       result.methodCode = this.extractOriginCode(
-        instance!.constructor.prototype[method!]?.toString() ?? ""
+        (instance!.constructor as { prototype: Record<string, { toString(): string }> }).prototype[method!]?.toString() ?? ""
       );
+      this.methodCache.set(ctor, result);
     }
 
     return result;

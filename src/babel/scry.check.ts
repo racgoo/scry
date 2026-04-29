@@ -261,9 +261,14 @@ class ScryChecker {
     }
   }
 
-  //Check if the environment is development/ it used only AST(babel)
+  //Check if the environment is development. Called at Babel transform time (always Node.js context).
+  //The isNodeJS() guard was removed because bundlers like Vite can expose a window object in their
+  //build context, causing the check to incorrectly return false for browser-targeted builds.
   static isDevelopmentMode() {
-    return Environment.isNodeJS() && process.env.NODE_ENV === DEVELOPMENT_MODE;
+    if (typeof process !== "undefined" && process.env) {
+      return process.env.NODE_ENV === DEVELOPMENT_MODE;
+    }
+    return false;
   }
 
   //Check if the function is a chained function

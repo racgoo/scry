@@ -56,8 +56,10 @@ export const ScryAstVariable = {
   methodCode: "methodCode",
   //zone.js property
   _properties: "_properties",
-  //prevReturnValue(for chained function, in case of method1().method2(), method1() is memorized as prevReturnValue)
-  prevReturnValue: "prevReturnValue",
+  //prevReturnValue stored as a Zone property instead of globalThis to avoid cross-chain contamination
+  //in concurrent async executions. Zone.current._properties._prevReturnValue is used instead of
+  //globalThis.prevReturnValue so that parallel async chains each maintain their own scoped value.
+  prevReturnValue: "_prevReturnValue",
   //originalCallReturnValue(return value of original call)
   originalCallReturnValue: "originalCallReturnValue",
   //processedArgs(args after spread). memorize origin call arguments
