@@ -416,41 +416,96 @@ class ScryAst {
   }
 
   //Add Zone.js import or require statement(on Program level)
-  // Injects `@racgoo/scry/zone` instead of bare `zone.js` so that zone.js is
-  // resolved from scry's own node_modules, not from the consumer project root.
-  // This prevents "Failed to resolve import zone.js" in tools like Vite that
-  // resolve bare specifiers relative to the file that contains the import.
+  // Always uses `@racgoo/scry/zone` (which bundles zone.js) so that zone.js is
+  // never resolved as a bare specifier from the consumer project root.
+  // In pnpm workspaces, bare `import "zone.js"` in a consumer file would fail
+  // because zone.js is only a transitive dependency (not directly installed).
+  // Bundling zone.js inside `@racgoo/scry/zone` eliminates that dependency entirely.
   public createZoneJSDeclaration(
     path: babel.NodePath<babel.types.Program>,
     esm: boolean
   ) {
     const scryChecker = new ScryChecker(this.t);
-    // Skip if the user already imported zone.js (bare or via scry/zone)
-    const zoneJSImported =
-      scryChecker.isImportedWithoutVariableDeclaration(path, "zone.js", esm) ||
-      scryChecker.isImportedWithoutVariableDeclaration(
-        path,
-        "@racgoo/scry/zone",
-        esm
-      );
-    if (zoneJSImported) {
-      return;
-    }
+
     if (esm) {
-      path.node.body.unshift(
-        this.t.importDeclaration(
-          [],
-          this.t.stringLiteral("@racgoo/scry/zone")
+      // Replace any existing bare `import "zone.js"` with the scry-bundled version.
+      // A bare zone.js import may have been injected by an older version of this
+      // plugin that did not yet bundle zone.js, or added manually by the user.
+      // Leaving it in place would cause "Failed to resolve import 'zone.js'" in
+      // Vite/pnpm environments where zone.js is not a direct project dependency.
+      for (let i = 0; i < path.node.body.length; i++) {
+        const node = path.node.body[i];
+        if (
+          node.type === "ImportDeclaration" &&
+          node.source.value === "zone.js" &&
+          node.specifiers.length === 0
+        ) {
+          // Swap to @racgoo/scry/zone in-place to preserve original position.
+          (node.source as babel.types.StringLiteral).value = "@racgoo/scry/zone";
+          return;
+        }
+      }
+
+      // Skip if already using the bundled path.
+      if (
+        scryChecker.isImportedWithoutVariableDeclaration(
+          path,
+          "@racgoo/scry/zone",
+          esm
         )
+      ) {
+        return;
+      }
+
+      path.node.body.unshift(
+        this.t.importDeclaration([], this.t.stringLiteral("@racgoo/scry/zone"))
       );
     } else {
-      path.node.body.unshift(
-        this.t.expressionStatement(
-          this.t.callExpression(this.t.identifier("require"), [
-            this.t.stringLiteral("@racgoo/scry/zone"),
-          ])
-        )
-      );
+      // CJS: replace require("zone.js") calls and inject require("@racgoo/scry/zone")
+      let replaced = false;
+      for (let i = 0; i < path.node.body.length; i++) {
+        const node = path.node.body[i];
+        if (
+          node.type === "ExpressionStatement" &&
+          node.expression.type === "CallExpression" &&
+          this.t.isIdentifier(
+            (node.expression as babel.types.CallExpression).callee,
+            { name: "require" }
+          ) &&
+          (node.expression as babel.types.CallExpression).arguments.length ===
+            1 &&
+          this.t.isStringLiteral(
+            (node.expression as babel.types.CallExpression).arguments[0],
+            { value: "zone.js" }
+          )
+        ) {
+          (
+            (node.expression as babel.types.CallExpression)
+              .arguments[0] as babel.types.StringLiteral
+          ).value = "@racgoo/scry/zone";
+          replaced = true;
+          break;
+        }
+      }
+
+      if (!replaced) {
+        if (
+          scryChecker.isImportedWithoutVariableDeclaration(
+            path,
+            "@racgoo/scry/zone",
+            esm
+          )
+        ) {
+          return;
+        }
+        path.node.body.unshift(
+          this.t.expressionStatement(
+            this.t.callExpression(this.t.identifier("require"), [
+              this.t.stringLiteral("@racgoo/scry/zone"),
+            ])
+          )
+        );
+      }
     }
   }
 

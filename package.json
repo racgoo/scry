@@ -31,7 +31,7 @@
   ],
   "scripts": {
     "inject-webui": "node scripts/embad-webui.js",
-    "build": "pnpm run build:esm && pnpm run build:cjs && node scripts/embad-webui.js",
+    "build": "pnpm run build:esm && pnpm run build:cjs && node scripts/bundle-zone.js && node scripts/embad-webui.js",
     "build:esm": "tsc -p configs/tsconfig.esm.json",
     "build:cjs": "tsc -p configs/tsconfig.cjs.json && node scripts/fix-cjs.js",
     "pack": "pnpm run build && pnpm pack --pack-destination ./packs",
