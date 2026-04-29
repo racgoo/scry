@@ -1,0 +1,53 @@
+---
+description: Babel 플러그인 / AST 변환 코드 작성 규칙
+globs: src/babel/**/*.ts
+alwaysApply: false
+---
+
+# Babel Plugin Rules
+
+## 생성되는 코드 구조 (CallExpression 변환 결과)
+
+```js
+/* __SCRY_MARK__ */ (() => {
+  const __SCRY_MARK__ = true;
+  const traceId = ...;                        // 전역 카운터
+  { /* traceContext 업데이트 */ }
+  const code = Extractor.extractCode(...);   // 소스 추출 (WeakMap 캐시)
+  let returnValue = null;
+  if ((Zone.current._properties?._depth ?? 0) >= MAX_DEPTH) return originalCall;
+  Zone[traceId] = (...).fork({ properties: { traceContext, _depth: n } });
+  const traceZone = Zone[traceId];
+  try {
+    returnValue = traceZone.run(() => {
+      const processedArgs = [...args];
+      emitEnter();
+      const result = originalCall(...processedArgs);
+      if (result?.then) result.then(() => emitDone());
+      else emitDone();
+      return result;
+    });
+  } catch (error) {
+    returnValue = error;
+    delete Zone[traceId];   // 에러 경로 정리
+    throw error;            // 반드시 rethrow
+  } finally {
+    delete Zone[traceId];   // 성공 경로 정리
+  }
+  Zone.current._properties._prevReturnValue = returnValue;  // Zone 격리
+  emitExit();
+  return returnValue;
+})()
+```
+
+## AST 코드 작성 원칙
+
+- 새 변수명은 `ScryAstVariable` 상수 맵에 추가하고 문자열 하드코딩 금지
+- `optionalMemberExpression` 사용 시 4번째 인자 `true`(optional=true) 필수
+- `createCodeExtractor`에서 chained 체크 시 `Zone.current._properties._prevReturnValue` 사용 (globalThis 금지)
+- 이벤트 emit은 `emitTraceEvent(getEventDetail(...))` 패턴 유지
+
+## 스킵 조건 추가 방법
+
+`scry-babel-plugin.ts`의 `skips` 배열에 조건을 추가하고,
+`ScryChecker`에 새 `isXxx()` 메서드로 분리할 것.

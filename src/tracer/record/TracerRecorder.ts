@@ -169,16 +169,22 @@ class TraceRecorder implements TraceRecorderInterface {
   /**
    * waitAllContextDone method.
    * This method is used to wait for all context to be done.
-   * return Promise that resolve when all context is done.
+   * Returns a Promise that resolves when all async traces complete or the timeout elapses.
+   * Without a timeout, an unhandled async error can leave traceIds in activeTraceIdSet
+   * forever because the "done" event is never emitted, causing this method to hang indefinitely.
    */
-  public waitAllContextDone(bundleId: number): Promise<boolean> {
+  public waitAllContextDone(
+    bundleId: number,
+    timeout = 5000
+  ): Promise<boolean> {
     return new Promise((resolve) => {
-      //Check if all context is done(end is sync task, so we need to check it with interval)
+      const start = Date.now();
       const interval = setInterval(() => {
-        if (this.isAllContextDone(bundleId)) {
-          //If all context is done, resolve promise
+        if (
+          this.isAllContextDone(bundleId) ||
+          Date.now() - start > timeout
+        ) {
           resolve(true);
-          //Clear interval
           clearInterval(interval);
         }
       }, WAIT_ALL_CONTEXT_DONE_INTERVAL);

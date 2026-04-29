@@ -10,28 +10,79 @@ const EXCLUDED_LIBS = [
   "node_modules/js-base64",
 ];
 
+/**
+ * Options accepted by all scryBabelPlugin variants.
+ *
+ * include  – Only transform files whose absolute path matches at least one of these
+ *            glob-style patterns. Defaults to all files.
+ * exclude  – Skip files whose absolute path matches any of these patterns.
+ *            All node_modules are always excluded regardless of this option.
+ * maxDepth – Maximum Zone nesting depth. Calls beyond this limit are still executed
+ *            but not traced, preventing runaway memory growth in deeply recursive code.
+ *            Defaults to 50.
+ */
+export interface ScryPluginOptions {
+  include?: string[];
+  exclude?: string[];
+  maxDepth?: number;
+}
+
+/**
+ * Converts a glob-like pattern to a RegExp and tests the file path.
+ * Supports ** (any path segments) and * (any chars within one segment).
+ */
+function matchesPattern(filePath: string, pattern: string): boolean {
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*\*/g, "__DOUBLE_STAR__")
+    .replace(/\*/g, "[^/\\\\]*")
+    .replace(/__DOUBLE_STAR__/g, ".*");
+  return new RegExp(escaped).test(filePath);
+}
+
+function isFileIncluded(
+  filePath: string,
+  options: ScryPluginOptions
+): boolean {
+  // Fast path: always exclude all node_modules. This is the single most impactful
+  // performance guard – previously only 4 specific packages were excluded, causing
+  // every third-party library in a bundle to be fully instrumented.
+  if (filePath.includes("node_modules")) return false;
+
+  // Belt-and-suspenders guard for known scry internals in non-standard install layouts.
+  if (EXCLUDED_LIBS.some((lib) => filePath.includes(lib))) return false;
+
+  // User-defined exclude patterns
+  if (options.exclude?.some((p) => matchesPattern(filePath, p))) return false;
+
+  // User-defined include patterns (absent = include everything)
+  if (options.include && options.include.length > 0) {
+    return options.include.some((p) => matchesPattern(filePath, p));
+  }
+
+  return true;
+}
+
 function scryBabelPlugin(
   { types: t }: { types: typeof babel.types },
-  type: "cjs" | "esm" //Output type
+  moduleType: "cjs" | "esm" | "auto",
+  options: ScryPluginOptions = {}
 ) {
-  // Pre process for origin code comment(but it must be done in visitor)
+  // Create ScryAst and ScryChecker ONCE per plugin invocation rather than per visited node.
+  // For a file with 1 000 CallExpressions the old code instantiated 2 000 objects.
+  const scryAst = new ScryAst(t);
+  const scryChecker = new ScryChecker(t);
+  const maxDepth = options.maxDepth ?? 50;
+
   const pre = function (this: babel.PluginPass) {
-    if (
-      this.filename &&
-      EXCLUDED_LIBS.some((lib) => this.filename?.includes(lib))
-    ) {
-      return; //Skip if the file is excluded
-    }
+    const filename = this.filename ?? "";
+    if (!isFileIncluded(filename, options)) return;
 
     try {
       if (this.file && this.file.path) {
-        //Origin code
         const code = this.file.code;
-        const scryAst = new ScryAst(t);
-        const scryChecker = new ScryChecker(t);
         this.file.path.traverse({
           FunctionDeclaration(path) {
-            //Pre process for origin code comment
             try {
               scryAst.preProcess(path, scryAst, scryChecker, code);
             } catch (error) {
@@ -39,7 +90,6 @@ function scryBabelPlugin(
             }
           },
           ClassDeclaration(path) {
-            //Pre process for origin code comment
             try {
               scryAst.preProcess(path, scryAst, scryChecker, code);
             } catch (error) {
@@ -47,7 +97,6 @@ function scryBabelPlugin(
             }
           },
           ClassMethod(path) {
-            //Pre process for origin code as string
             try {
               scryAst.preProcess(path, scryAst, scryChecker, code);
             } catch (error) {
@@ -55,7 +104,6 @@ function scryBabelPlugin(
             }
           },
           ObjectMethod(path) {
-            //Pre process for origin code as string
             try {
               scryAst.preProcess(path, scryAst, scryChecker, code);
             } catch (error) {
@@ -63,7 +111,6 @@ function scryBabelPlugin(
             }
           },
           ArrowFunctionExpression(path) {
-            //Pre process for origin code as string
             try {
               scryAst.preProcess(path, scryAst, scryChecker, code);
             } catch (error) {
@@ -76,11 +123,10 @@ function scryBabelPlugin(
         });
       }
     } catch (error) {
-      console.error("Babel plugin error:", error);
+      console.error("Babel plugin pre error:", error);
     }
   };
 
-  //Visitor for inject trace code
   const visitor = {
     Program: {
       enter(
@@ -88,26 +134,23 @@ function scryBabelPlugin(
         state: babel.PluginPass
       ) {
         try {
-          //check if the file is excluded
-          const scryChecker = new ScryChecker(t);
-          if (scryChecker.isExcluded(state, EXCLUDED_LIBS)) {
-            return;
-          }
+          const filename = state.filename ?? "";
+          if (!isFileIncluded(filename, options)) return;
 
-          const esm = type === "esm";
-          const scryAst = new ScryAst(t);
-          // Add Zone.root initialization code if not initialized
+          // "auto" mode: detect from Babel's sourceType and nearest package.json.
+          // Previously users had to choose scryBabelPluginForESM vs scryBabelPluginForCJS.
+          const esm =
+            moduleType === "auto"
+              ? ScryChecker.isESM(state)
+              : moduleType === "esm";
+
           scryAst.createZoneRootInitialization(path);
-          //Create trace context declare
           scryAst.createTraceConextDeclare(path);
-          //Add Extractor import statement
           scryAst.createExtractorDeclaration(path, esm);
-          //Add Tracer import statement
           scryAst.createTracerDeclaration(path, esm);
-          //Add Zone.js import statement
           scryAst.createZoneJSDeclaration(path, esm);
         } catch (error) {
-          console.error("Babel plugin error:", error);
+          console.error("Babel plugin Program.enter error:", error);
         }
       },
     },
@@ -115,7 +158,6 @@ function scryBabelPlugin(
       path: babel.NodePath<babel.types.FunctionDeclaration>
     ) => {
       try {
-        const scryAst = new ScryAst(t);
         scryAst.createTraceConextDeclare(path);
       } catch (error) {
         console.error("FunctionDeclaration error:", error);
@@ -125,7 +167,6 @@ function scryBabelPlugin(
       path: babel.NodePath<babel.types.FunctionExpression>
     ) => {
       try {
-        const scryAst = new ScryAst(t);
         scryAst.createTraceConextDeclare(path);
       } catch (error) {
         console.error("FunctionExpression error:", error);
@@ -135,7 +176,6 @@ function scryBabelPlugin(
       path: babel.NodePath<babel.types.ArrowFunctionExpression>
     ) => {
       try {
-        const scryAst = new ScryAst(t);
         scryAst.createTraceConextDeclare(path);
       } catch (error) {
         console.error("ArrowFunctionExpression error:", error);
@@ -143,7 +183,6 @@ function scryBabelPlugin(
     },
     ClassMethod: (path: babel.NodePath<babel.types.ClassMethod>) => {
       try {
-        const scryAst = new ScryAst(t);
         scryAst.createTraceConextDeclare(path);
       } catch (error) {
         console.error("ClassMethod error:", error);
@@ -151,7 +190,6 @@ function scryBabelPlugin(
     },
     ObjectMethod: (path: babel.NodePath<babel.types.ObjectMethod>) => {
       try {
-        const scryAst = new ScryAst(t);
         scryAst.createTraceConextDeclare(path);
       } catch (error) {
         console.error("ObjectMethod error:", error);
@@ -163,9 +201,9 @@ function scryBabelPlugin(
         state: babel.PluginPass
       ) {
         try {
-          transformCall(path, state, t);
+          transformCall(path, state, t, scryAst, scryChecker, maxDepth);
         } catch (error) {
-          console.error("Babel plugin error:", error);
+          console.error("NewExpression.exit error:", error);
         }
       },
     },
@@ -175,171 +213,157 @@ function scryBabelPlugin(
         state: babel.PluginPass
       ) {
         try {
-          //check if the file is excluded
-          const scryChecker = new ScryChecker(t);
-          if (scryChecker.isExcluded(state, EXCLUDED_LIBS)) {
-            return;
-          }
-          //AST transform
-          transformCall(path, state, t);
+          const filename = state.filename ?? "";
+          if (!isFileIncluded(filename, options)) return;
+          transformCall(path, state, t, scryAst, scryChecker, maxDepth);
         } catch (error) {
-          console.error("Babel plugin error:", error);
+          console.error("CallExpression.exit error:", error);
         }
       },
     },
   };
 
-  //Transform call code with trace code(With zone.js scope)
-  function transformCall(
-    path: babel.NodePath<
-      babel.types.CallExpression | babel.types.NewExpression
-    >,
-    state: babel.PluginPass,
-    t: typeof babel.types
-  ) {
-    //Create checker and inject t (babel.types must be injected by transformFile function)
-    const scryChecker = new ScryChecker(t);
-    //Create ast generator
-    const scryAst = new ScryAst(t);
-    //Check development mode
-    const developmentMode = ScryChecker.isDevelopmentMode();
-    //Check if the function is a duplicate function
-    const duplicated = scryChecker.isDuplicateFunction(path);
-    //Check if the function is a JSX function
-    const jsx = scryChecker.isJSX(path);
-    //Check if the function is a react refresh registration
-    const refreshReg = t.isIdentifier(path.node.callee, {
-      name: "$RefreshReg$",
-    });
-    //Check if the function is a Zone.root[ACTIVE_TRACE_ID_SET] = new Set() initialization
-    const zoneRootInitialization =
-      scryChecker.isZoneRootActiveTraceSetInit(path);
-    //Check if the function is a trace zone initialization
-    const traceZoneInitialization =
-      scryChecker.isDefaultTraceZoneInitialization(path.node);
-    //Check if the function is a reactDOM call
-    const reactDOMCall = scryChecker.isReactDOMCall(path.node);
-    //Check if the function is a nodejs process function
-    const nodejsProcessFunction = scryChecker.isNodejsProcessMethod(path);
-    //Check if the function is a "require" call
-    const requireCall = t.isIdentifier(path.node.callee, { name: "require" });
-    //Check if the function is a tracer method(Tracer.start() or Tracer.end())
-    const tracerMethod = scryChecker.isTracerMethod(path);
-    //Check if the function is a extractor method(Extractor.extractCode())
-    const extractorMethod = scryChecker.isExtractorMethod(path);
-
-    //Skip conditions
-    const skips = [
-      !developmentMode,
-      zoneRootInitialization,
-      traceZoneInitialization,
-      reactDOMCall,
-      requireCall,
-      duplicated,
-      jsx,
-      nodejsProcessFunction,
-      refreshReg,
-      tracerMethod,
-      extractorMethod,
-    ];
-    //Skip if any skip is true
-    if (skips.some((skip) => skip)) {
-      path.skip();
-      return;
-    }
-    //Check if the function is an await expression
-    const awaitExpression = path.findParent((p) => p.isAwaitExpression())
-      ? true
-      : false;
-    //Extract isChained function
-    const chained = scryChecker.isChainedFunction(path);
-    //Extract function name
-    const fnName = scryAst.getFunctionName(path);
-    //Generate new node (with marker comment)
-    const newNode = t.callExpression(
-      //Arrow function expression("this" must not be reset)
-      t.arrowFunctionExpression(
-        [],
-        t.blockStatement([
-          //Create marker variable
-          scryAst.createMarkerVariable(),
-          //Create traceId
-          scryAst.createTraceId(),
-          //Create parent traceId optional updater(for async/await)
-          scryAst.createTraceContextOptionalUpdater(),
-          //Extract code from location
-          scryAst.createCodeExtractor(path, chained),
-
-          //Create returnValue
-          scryAst.createReturnValueDeclaration(),
-          //Create new trace-zone based on current trace-id forked with parent traceId
-          scryAst.createNewZoneContextWithTraceId(),
-          //Create Declare traceZone
-          scryAst.createDeclareTraceZoneWithTraceId(),
-          //Update returnValue with origin execution(With zone.js scope)
-          scryAst.craeteOriginCallExecutor(path, state, chained),
-          t.expressionStatement(
-            t.assignmentExpression(
-              "=",
-              t.memberExpression(
-                t.identifier("globalThis"),
-                t.identifier(ScryAstVariable.prevReturnValue)
-              ),
-              t.identifier(ScryAstVariable.returnValue)
-            )
-          ),
-          //Generate 'exit' event
-          //hmm,, under code can be hidden in "craeteOriginCallExecutor"
-          t.expressionStatement(
-            scryAst.emitTraceEvent(
-              scryAst.getEventDetail(path, state, {
-                type: "exit",
-                fnName,
-                chained,
-              })
-            )
-          ),
-          //Return origin function result
-          t.returnStatement(t.identifier(ScryAstVariable.returnValue)),
-        ]),
-        awaitExpression
-      ),
-      []
-    );
-    //Add marker comment
-    newNode.leadingComments = [
-      { type: "CommentBlock", value: ` ${TRACE_MARKER} ` },
-    ];
-
-    path.replaceWith(newNode);
-    path.skip();
-  }
-
   const post = function (this: babel.PluginPass) {
-    //All files are processed(it is not necessary to check if the file is excluded, Tracer needs it)
     try {
       if (this.file && this.file.path) {
-        const scryAst = new ScryAst(t);
-        //Add plugin applied variable to the end of the file(it is hoisted)
         this.file.path.node.body.unshift(
           t.expressionStatement(scryAst.createPluginAppliedVariable())
         );
       }
     } catch (error) {
-      console.error("Babel plugin error:", error);
+      console.error("Babel plugin post error:", error);
     }
   };
 
   return { visitor, pre, post };
 }
 
-//For CJS output(CommonJS)
-function scryBabelPluginForCJS({ types: t }: { types: typeof babel.types }) {
-  return scryBabelPlugin({ types: t }, "cjs");
-}
-//For ESM output(ES Module)
-function scryBabelPluginForESM({ types: t }: { types: typeof babel.types }) {
-  return scryBabelPlugin({ types: t }, "esm");
+function transformCall(
+  path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>,
+  state: babel.PluginPass,
+  t: typeof babel.types,
+  scryAst: ScryAst,
+  scryChecker: ScryChecker,
+  maxDepth: number
+) {
+  const developmentMode = ScryChecker.isDevelopmentMode();
+  const duplicated = scryChecker.isDuplicateFunction(path);
+  const jsx = scryChecker.isJSX(path);
+  const refreshReg = t.isIdentifier(path.node.callee, { name: "$RefreshReg$" });
+  const zoneRootInitialization = scryChecker.isZoneRootActiveTraceSetInit(path);
+  const traceZoneInitialization = scryChecker.isDefaultTraceZoneInitialization(
+    path.node
+  );
+  const reactDOMCall = scryChecker.isReactDOMCall(path.node);
+  const nodejsProcessFunction = scryChecker.isNodejsProcessMethod(path);
+  const requireCall = t.isIdentifier(path.node.callee, { name: "require" });
+  const tracerMethod = scryChecker.isTracerMethod(path);
+  const extractorMethod = scryChecker.isExtractorMethod(path);
+
+  const skips = [
+    !developmentMode,
+    zoneRootInitialization,
+    traceZoneInitialization,
+    reactDOMCall,
+    requireCall,
+    duplicated,
+    jsx,
+    nodejsProcessFunction,
+    refreshReg,
+    tracerMethod,
+    extractorMethod,
+  ];
+  if (skips.some((skip) => skip)) {
+    path.skip();
+    return;
+  }
+
+  const awaitExpression = path.findParent((p) => p.isAwaitExpression())
+    ? true
+    : false;
+  const chained = scryChecker.isChainedFunction(path);
+  const fnName = scryAst.getFunctionName(path);
+
+  const newNode = t.callExpression(
+    t.arrowFunctionExpression(
+      [],
+      t.blockStatement([
+        scryAst.createMarkerVariable(),
+        scryAst.createTraceId(),
+        scryAst.createTraceContextOptionalUpdater(),
+        scryAst.createCodeExtractor(path, chained),
+        scryAst.createReturnValueDeclaration(),
+        // Skip Zone instrumentation when nesting depth exceeds maxDepth.
+        // The original call is still executed – only tracing overhead is bypassed.
+        scryAst.createMaxDepthGuard(maxDepth, path.node),
+        scryAst.createNewZoneContextWithTraceId(),
+        scryAst.createDeclareTraceZoneWithTraceId(),
+        scryAst.craeteOriginCallExecutor(path, state, chained),
+        t.expressionStatement(
+          t.assignmentExpression(
+            "=",
+            t.memberExpression(
+              t.memberExpression(
+                t.memberExpression(
+                  t.identifier("Zone"),
+                  t.identifier("current")
+                ),
+                t.identifier(ScryAstVariable._properties)
+              ),
+              t.identifier(ScryAstVariable.prevReturnValue)
+            ),
+            t.identifier(ScryAstVariable.returnValue)
+          )
+        ),
+        t.expressionStatement(
+          scryAst.emitTraceEvent(
+            scryAst.getEventDetail(path, state, {
+              type: "exit",
+              fnName,
+              chained,
+            })
+          )
+        ),
+        t.returnStatement(t.identifier(ScryAstVariable.returnValue)),
+      ]),
+      awaitExpression
+    ),
+    []
+  );
+  newNode.leadingComments = [
+    { type: "CommentBlock", value: ` ${TRACE_MARKER} ` },
+  ];
+
+  path.replaceWith(newNode);
+  path.skip();
 }
 
-export { scryBabelPluginForCJS, scryBabelPluginForESM };
+/** Auto-detects ESM vs CJS per file (recommended for most setups). */
+function scryBabelPluginAutoDetect(
+  api: { types: typeof babel.types },
+  options: ScryPluginOptions = {}
+) {
+  return scryBabelPlugin(api, "auto", options);
+}
+
+/** Explicit CJS variant (use when auto-detection fails for your toolchain). */
+function scryBabelPluginForCJS(
+  api: { types: typeof babel.types },
+  options: ScryPluginOptions = {}
+) {
+  return scryBabelPlugin(api, "cjs", options);
+}
+
+/** Explicit ESM variant (use when auto-detection fails for your toolchain). */
+function scryBabelPluginForESM(
+  api: { types: typeof babel.types },
+  options: ScryPluginOptions = {}
+) {
+  return scryBabelPlugin(api, "esm", options);
+}
+
+export {
+  scryBabelPluginForCJS,
+  scryBabelPluginForESM,
+  scryBabelPluginAutoDetect,
+};

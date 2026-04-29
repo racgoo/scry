@@ -1,0 +1,31 @@
+---
+description: Scry 프로젝트 전체 개요 및 AI 가이드
+alwaysApply: true
+---
+
+# Scry Project
+
+Scry는 Babel AST 플러그인으로 모든 CallExpression을 변환해 Zone.js 기반으로 실행 흐름을 추적하는 JS/TS 라이브러리다.
+
+## 구조 한 줄 요약
+
+- `src/babel/` — 빌드 타임 AST 변환 (플러그인)
+- `src/tracer/` — 런타임 이벤트 수집 / 트리 생성 / HTML 내보내기
+- `src/utils/` — 소스 코드 추출(Extractor), 환경 감지
+- `webUI/` — 리포트 뷰어 Vite 앱
+
+## 빌드 / 타입체크
+
+```bash
+npm run build                                         # 전체 빌드
+node node_modules/typescript/bin/tsc --noEmit         # 타입 에러만 체크 (빠름)
+npm test                                              # Jest
+```
+
+## 핵심 제약
+
+- `ScryAst` / `ScryChecker` 는 플러그인당 한 번만 instantiate (방문자마다 생성 금지)
+- 모든 `node_modules` 는 최우선으로 skip
+- catch 블록에서 에러를 삼키면 안 됨 — 항상 rethrow
+- Zone 생성(`Zone.fork`) 후 반드시 `delete Zone[traceId]`로 정리
+- `scry.constant.ts`의 `ScryAstVariable`에 새 변수 이름 추가할 것 (하드코딩 금지)

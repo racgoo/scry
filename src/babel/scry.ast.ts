@@ -208,11 +208,15 @@ class ScryAst {
               this.t.identifier("extractCode")
             ),
             [
-              // this.t.identifier(callee),
-              // callee.object,
               chained
                 ? this.t.memberExpression(
-                    this.t.identifier(ScryAstVariable.globalThis),
+                    this.t.memberExpression(
+                      this.t.memberExpression(
+                        this.t.identifier("Zone"),
+                        this.t.identifier("current")
+                      ),
+                      this.t.identifier(ScryAstVariable._properties)
+                    ),
                     this.t.identifier(ScryAstVariable.prevReturnValue)
                   )
                 : callee.object,
@@ -559,6 +563,42 @@ class ScryAst {
     );
   }
 
+  /**
+   * Creates a guard that short-circuits tracing when Zone nesting exceeds maxDepth.
+   * The depth is stored as `_depth` in each scry-created Zone's _properties so we can
+   * read it in O(1). Without this, deeply recursive functions create one Zone per call,
+   * causing unbounded memory growth. When the limit is exceeded the original call is still
+   * executed – only the tracing overhead is skipped.
+   *
+   * Generated code:
+   *   if ((Zone.current._properties?._depth ?? 0) >= maxDepth) return <originalNode>;
+   */
+  public createMaxDepthGuard(
+    maxDepth: number,
+    originalNode: babel.types.CallExpression | babel.types.NewExpression
+  ) {
+    return this.t.ifStatement(
+      this.t.binaryExpression(
+        ">=",
+        this.t.logicalExpression(
+          "??",
+          this.t.optionalMemberExpression(
+            this.t.memberExpression(
+              this.t.identifier("Zone"),
+              this.t.identifier("current")
+            ),
+            this.t.stringLiteral("_depth"),
+            true,
+            true
+          ),
+          this.t.numericLiteral(0)
+        ) as babel.types.Expression,
+        this.t.numericLiteral(maxDepth)
+      ),
+      this.t.blockStatement([this.t.returnStatement(originalNode)])
+    );
+  }
+
   //Create ast marker variable
   public createMarkerVariable() {
     return this.t.variableDeclaration("const", [
@@ -669,6 +709,28 @@ class ScryAst {
                         this.t.identifier(ScryAstVariable.traceId)
                       ),
                     ])
+                  ),
+                  //Track Zone nesting depth so the maxDepth guard can do an O(1) check.
+                  //Inherits parent depth via Zone.current._properties?._depth ?? 0 and adds 1.
+                  this.t.objectProperty(
+                    this.t.identifier("_depth"),
+                    this.t.binaryExpression(
+                      "+",
+                      this.t.logicalExpression(
+                        "??",
+                        this.t.optionalMemberExpression(
+                          this.t.memberExpression(
+                            this.t.identifier("Zone"),
+                            this.t.identifier("current")
+                          ),
+                          this.t.stringLiteral("_depth"),
+                          true,
+                          true
+                        ),
+                        this.t.numericLiteral(0)
+                      ) as babel.types.Expression,
+                      this.t.numericLiteral(1)
+                    )
                   ),
                 ])
               ),
@@ -872,7 +934,9 @@ class ScryAst {
     }
     //Create try block
     const tryBlock = this.t.blockStatement([resultAst]);
-    //Create catch clause
+    //Create catch clause: record the error as returnValue, emit exit event for observability,
+    //clean up the Zone entry to prevent memory leak, then rethrow to preserve original call semantics.
+    //Without rethrow, user try/catch blocks around traced functions would silently swallow errors.
     const catchClause = this.t.catchClause(
       this.t.identifier("error"),
       this.t.blockStatement([
@@ -883,9 +947,34 @@ class ScryAst {
             this.t.identifier("error")
           )
         ),
+        //Clean up Zone entry on error path to prevent memory leak
+        this.t.expressionStatement(
+          this.t.unaryExpression(
+            "delete",
+            this.t.memberExpression(
+              this.t.identifier("Zone"),
+              this.t.identifier(ScryAstVariable.traceId),
+              true
+            )
+          )
+        ),
+        this.t.throwStatement(this.t.identifier("error")),
       ])
     );
-    return this.t.tryStatement(tryBlock, catchClause);
+    //Create finally clause: always clean up the Zone entry after successful execution
+    const finallyBlock = this.t.blockStatement([
+      this.t.expressionStatement(
+        this.t.unaryExpression(
+          "delete",
+          this.t.memberExpression(
+            this.t.identifier("Zone"),
+            this.t.identifier(ScryAstVariable.traceId),
+            true
+          )
+        )
+      ),
+    ]);
+    return this.t.tryStatement(tryBlock, catchClause, finallyBlock);
   }
 
   //Create emit trace event ast object
