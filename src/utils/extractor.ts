@@ -46,12 +46,27 @@ class Extractor {
       methodCode: "",
     };
 
+    // func and isMethod are mutually exclusive in generated code:
+    // - member-expression calls pass (instance, methodName, null)
+    // - standalone calls pass (null, null, funcRef)
+    // Guard both paths independently so a future call pattern that passes all
+    // three arguments doesn't cause the early-return from functionCache to skip
+    // the method-info population.
     if (func) {
       if (this.functionCache.has(func as object)) {
-        return this.functionCache.get(func as object)!;
+        const cached = this.functionCache.get(func as object)!;
+        // If this same call also provides method info, merge it in rather than
+        // returning the cached (method-less) result immediately.
+        if (!this.isMethod(instance, method)) {
+          return cached;
+        }
+        result.functionCode = cached.functionCode;
+      } else {
+        result.functionCode = this.extractOriginCode(
+          (func as unknown as { toString(): string }).toString()
+        );
+        this.functionCache.set(func as object, result);
       }
-      result.functionCode = this.extractOriginCode((func as unknown as { toString(): string }).toString());
-      this.functionCache.set(func as object, result);
     }
 
     if (this.isMethod(instance, method)) {
@@ -63,7 +78,11 @@ class Extractor {
         instance!.constructor.toString()
       );
       result.methodCode = this.extractOriginCode(
-        (instance!.constructor as { prototype: Record<string, { toString(): string }> }).prototype[method!]?.toString() ?? ""
+        (
+          instance!.constructor as {
+            prototype: Record<string, { toString(): string }>;
+          }
+        ).prototype[method!]?.toString() ?? ""
       );
       this.methodCache.set(ctor, result);
     }

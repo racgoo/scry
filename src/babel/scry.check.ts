@@ -100,7 +100,14 @@ class ScryChecker {
               ) {
                 return true;
               }
-              if (decl.id.type === "Identifier") {
+              // Identifier case: `const Tracer = require("@racgoo/scry")`
+              // The binding name must match `name` — the previous code returned
+              // true for ANY identifier binding regardless of what name was used,
+              // causing false-positive "already imported" results.
+              if (
+                decl.id.type === "Identifier" &&
+                decl.id.name === name
+              ) {
                 return true;
               }
             }
@@ -295,20 +302,22 @@ class ScryChecker {
     );
   }
 
-  //Check if the function is a nodejs process method
+  // Skip instrumentation only for process.on / process.emit which directly
+  // interact with the Node.js event loop and can cause infinite recursion when
+  // wrapped in a Zone-forking IIFE. Other process.* calls (e.g. process.cwd(),
+  // process.exit()) are safe to trace and were unintentionally excluded by the
+  // previous overly-broad second OR branch.
   public isNodejsProcessMethod(
     path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
   ) {
     return (
-      (this.t.isMemberExpression(path.node.callee) &&
-        this.t.isIdentifier(path.node.callee.object) &&
-        path.node.callee.object.name === "process" &&
-        this.t.isIdentifier(path.node.callee.property) &&
-        ["on", "emit"].includes(path.node.callee.property.name)) ||
-      //Check if the function is a process function
-      (this.t.isMemberExpression(path.node.callee) &&
-        this.t.isIdentifier(path.node.callee.object) &&
-        path.node.callee.object.name === "process")
+      this.t.isMemberExpression(path.node.callee) &&
+      this.t.isIdentifier(path.node.callee.object) &&
+      path.node.callee.object.name === "process" &&
+      this.t.isIdentifier(path.node.callee.property) &&
+      ["on", "emit", "nextTick", "addListener", "removeListener"].includes(
+        path.node.callee.property.name
+      )
     );
   }
   //Check if the function is a JSX function

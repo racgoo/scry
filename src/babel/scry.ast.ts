@@ -230,6 +230,10 @@ class ScryAst {
         ),
       ]);
     } else {
+      // callee can be Identifier, CallExpression, ArrowFunctionExpression, etc.
+      // We pass it as-is (any Expression evaluates to the function at runtime).
+      // The previous cast to Identifier was incorrect for non-identifier callees
+      // such as IIFEs or higher-order calls like getFunc()().
       return this.t.variableDeclaration("const", [
         this.t.variableDeclarator(
           this.t.identifier("code"),
@@ -241,8 +245,7 @@ class ScryAst {
             [
               this.t.nullLiteral(),
               this.t.nullLiteral(),
-              // this.t.stringLiteral(originCode),
-              callee as babel.types.Identifier,
+              callee as babel.types.Expression,
             ]
           )
         ),
@@ -859,7 +862,49 @@ class ScryAst {
                             ),
                             this.t.identifier("then")
                           ),
+                          // Pass both onFulfilled and onRejected so that a rejected
+                          // Promise still emits the done event and cleans up
+                          // activeTraceIdSet. Without onRejected, rejected Promises
+                          // would leave the traceId in activeTraceIdSet indefinitely
+                          // (until the waitAllContextDone timeout fires).
                           [
+                            this.t.arrowFunctionExpression(
+                              [],
+                              this.t.blockStatement([
+                                this.t.variableDeclaration("let", [
+                                  this.t.variableDeclarator(
+                                    this.t.identifier(
+                                      ScryAstVariable.traceContext
+                                    ),
+                                    this.t.memberExpression(
+                                      this.t.memberExpression(
+                                        this.t.memberExpression(
+                                          this.t.identifier("Zone"),
+                                          this.t.identifier("current")
+                                        ),
+                                        this.t.identifier(
+                                          ScryAstVariable._properties
+                                        )
+                                      ),
+                                      this.t.stringLiteral(
+                                        ScryAstVariable.traceContext
+                                      ),
+                                      true
+                                    )
+                                  ),
+                                ]),
+                                this.t.expressionStatement(
+                                  this.emitTraceEvent(
+                                    this.getEventDetail(path, state, {
+                                      type: "done",
+                                      fnName: this.getFunctionName(path),
+                                      chained: false,
+                                    })
+                                  )
+                                ),
+                              ])
+                            ),
+                            // onRejected: emit done even when the Promise rejects
                             this.t.arrowFunctionExpression(
                               [],
                               this.t.blockStatement([

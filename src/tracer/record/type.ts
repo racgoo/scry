@@ -26,7 +26,7 @@ interface TraceDetail {
   source: string;
   args: unknown[];
   traceBundleId: number;
-  parentTraceId: number;
+  parentTraceId: number | null;
   returnValue: unknown;
   classCode: string;
   methodCode: string;
