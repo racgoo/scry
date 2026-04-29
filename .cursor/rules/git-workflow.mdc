@@ -1,0 +1,61 @@
+---
+description: Git 커밋, push, PR 자동화 규칙
+alwaysApply: true
+---
+
+# Git & PR Workflow
+
+## 한 번만 하는 초기 설정
+
+`gh` CLI가 없으면 push/PR이 자동으로 안 된다. 다음을 한 번만 실행:
+
+```bash
+brew install gh
+gh auth login
+# → HTTPS 선택 → GitHub.com → Authenticate Git operations → Browser 선택
+# → 브라우저에서 racgoo 계정으로 로그인
+```
+
+완료 후 `gh auth status` 로 `racgoo` 계정이 표시되면 이후 모든 push/PR이 자동으로 동작한다.
+
+## 브랜치 네이밍
+
+| 작업 | 형식 |
+|------|------|
+| 새 기능 | `feat/<topic>` |
+| 버그 수정 | `fix/<topic>` |
+| 리팩토링 | `refactor/<topic>` |
+| 문서 | `docs/<topic>` |
+
+## 커밋 & PR 절차 (Claude가 따라야 하는 순서)
+
+1. 변경 파일 확인: `git status` + `git diff --stat`
+2. 새 브랜치 (main이면): `git checkout -b <type>/<topic>`
+3. 스테이징: `git add <files>`
+4. 커밋 (HEREDOC 사용):
+   ```bash
+   git commit -m "$(cat <<'EOF'
+   <type>: <subject>
+
+   <body — 변경 이유 중심, 무엇을 했는지는 코드가 말함>
+   EOF
+   )"
+   ```
+5. Push: `git push -u origin HEAD`
+6. PR: `gh pr create --title "..." --body "$(cat <<'EOF' ... EOF)"`
+
+## PR 본문 템플릿
+
+```markdown
+## Summary
+- 변경 이유 / 해결한 문제 bullet
+
+## Test plan
+- [ ] 확인할 항목들
+```
+
+## 주의
+
+- `git push` 가 403 이면 `gh auth login` 으로 racgoo 계정 재인증
+- force push, `--no-verify`, `--amend` (이미 push한 경우) 는 사용자 명시 허락 없이 금지
+- main/master 브랜치에 직접 push 금지
