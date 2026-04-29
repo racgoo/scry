@@ -201,6 +201,8 @@ function scryBabelPlugin(
         state: babel.PluginPass
       ) {
         try {
+          const filename = state.filename ?? "";
+          if (!isFileIncluded(filename, options)) return;
           transformCall(path, state, t, scryAst, scryChecker, maxDepth);
         } catch (error) {
           console.error("NewExpression.exit error:", error);
