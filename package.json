@@ -27,14 +27,19 @@
   ],
   "scripts": {
     "inject-webui": "node scripts/embad-webui.js",
-    "build": "npm run build:esm && npm run build:cjs && node scripts/embad-webui.js",
+    "build": "pnpm run build:esm && pnpm run build:cjs && node scripts/embad-webui.js",
     "build:esm": "tsc -p configs/tsconfig.esm.json",
     "build:cjs": "tsc -p configs/tsconfig.cjs.json && node scripts/fix-cjs.js",
+    "pack": "pnpm run build && pnpm pack --pack-destination ./packs",
     "test": "jest",
     "lint": "eslint src --ext .ts",
     "example": "ts-node examples/test.ts",
-    "prepare": "npm run build",
-    "release": "npm run prepare && npm version patch && npm publish --access=public"
+    "prepare": "pnpm run build",
+    "release": "pnpm run prepare && npm version patch && npm publish --access=public"
+  },
+  "packageManager": "pnpm@10.26.1",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
   },
   "keywords": [
     "typescript",
