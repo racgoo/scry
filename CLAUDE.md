@@ -91,25 +91,49 @@ Source code
 
 ## Git Workflow
 
-Branch naming: `fix/<topic>`, `feat/<topic>`, `refactor/<topic>`
+### Branch Strategy (GitFlow Lite)
+
+```
+main ──────────────────────► releases only (npm publish)
+        ↑
+develop ───────────────────► integration branch — ALL PR base
+    ↑        ↑        ↑
+feat/*    fix/*   chore/*  refactor/*  docs/*
+```
+
+| Branch | Purpose | PR target |
+|--------|---------|-----------|
+| `main` | Stable releases only. No direct push. | — |
+| `develop` | Integration. Base for all feature/fix branches. | `main` (on release) |
+| `feat/<topic>` | New feature | `develop` |
+| `fix/<topic>` | Bug fix | `develop` |
+| `refactor/<topic>` | Structural changes, no behaviour change | `develop` |
+| `chore/<topic>` | Build, deps, config | `develop` |
+| `docs/<topic>` | Documentation only | `develop` |
+| `hotfix/<topic>` | Production emergency patch | `main` direct (then cherry-pick to `develop`) |
+
+### Commands
 
 ```bash
-# One-time setup (needed before push/PR commands work)
+# One-time setup
 brew install gh
 gh auth login   # choose HTTPS, browser auth — use the racgoo account
 
+# Start work (always branch from develop)
+git checkout develop && git pull
+git checkout -b fix/my-fix
+
 # Commit and push
-git checkout -b feat/my-feature
 git add <files>
-git commit -m "feat: ..."
+git commit -m "fix: ..."
 git push -u origin HEAD
 
-# Open PR
-gh pr create --fill
+# Open PR targeting develop
+gh pr create --base develop --title "fix: ..." --body "..."
 ```
 
-> GitHub remote is `https://github.com/racgoo/scry.git`.  
-> The account that owns the repo is **racgoo** (`lhsung98@naver.com`).  
+> GitHub remote: `git@racgoo:racgoo/scry.git` (SSH).  
+> Account: **racgoo** (`lhsung98@naver.com`).  
 > If `git push` returns 403, run `gh auth login` and pick the racgoo account.
 
 ## Package Info

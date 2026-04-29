@@ -5,32 +5,54 @@ alwaysApply: true
 
 # Git & PR Workflow
 
-## 한 번만 하는 초기 설정
+## 브랜치 전략 (GitFlow Lite)
 
-`gh` CLI가 없으면 push/PR이 자동으로 안 된다. 다음을 한 번만 실행:
+```
+main ──────────────────────────────► 릴리즈 전용 (npm publish)
+         ↑
+develop ──────────────────────────► 통합 브랜치 (모든 PR의 base)
+   ↑         ↑         ↑         ↑
+feat/*    fix/*    chore/*   refactor/*
+```
+
+### 규칙 요약
+
+| 브랜치 | 역할 | PR 대상 |
+|--------|------|---------|
+| `main` | 안정 릴리즈 전용. 직접 push 금지 | — |
+| `develop` | 통합 브랜치. 모든 작업 브랜치의 PR base | `main` (버전 릴리즈 시) |
+| `feat/<topic>` | 새 기능 | `develop` |
+| `fix/<topic>` | 버그 수정 | `develop` |
+| `refactor/<topic>` | 구조 개선 (동작 변경 없음) | `develop` |
+| `chore/<topic>` | 빌드, 의존성, 설정 변경 | `develop` |
+| `docs/<topic>` | 문서만 변경 | `develop` |
+| `hotfix/<topic>` | 프로덕션 긴급 패치 | `main` **직접** (develop에도 cherry-pick) |
+
+### 릴리즈 흐름
+
+```
+develop → PR → main → npm version patch → npm publish
+```
+
+## 초기 설정 (한 번만)
 
 ```bash
 brew install gh
 gh auth login
-# → HTTPS 선택 → GitHub.com → Authenticate Git operations → Browser 선택
+# → HTTPS → GitHub.com → Authenticate Git operations → Browser
 # → 브라우저에서 racgoo 계정으로 로그인
 ```
 
-완료 후 `gh auth status` 로 `racgoo` 계정이 표시되면 이후 모든 push/PR이 자동으로 동작한다.
-
-## 브랜치 네이밍
-
-| 작업 | 형식 |
-|------|------|
-| 새 기능 | `feat/<topic>` |
-| 버그 수정 | `fix/<topic>` |
-| 리팩토링 | `refactor/<topic>` |
-| 문서 | `docs/<topic>` |
+`gh auth status`에서 `racgoo` 계정이 표시되면 완료.
 
 ## 커밋 & PR 절차 (Claude가 따라야 하는 순서)
 
 1. 변경 파일 확인: `git status` + `git diff --stat`
-2. 새 브랜치 (main이면): `git checkout -b <type>/<topic>`
+2. `develop`에서 새 브랜치 생성:
+   ```bash
+   git checkout develop && git pull
+   git checkout -b <type>/<topic>
+   ```
 3. 스테이징: `git add <files>`
 4. 커밋 (HEREDOC 사용):
    ```bash
@@ -42,7 +64,17 @@ gh auth login
    )"
    ```
 5. Push: `git push -u origin HEAD`
-6. PR: `gh pr create --title "..." --body "$(cat <<'EOF' ... EOF)"`
+6. PR (`develop`을 base로):
+   ```bash
+   gh pr create --title "..." --base develop --body "$(cat <<'EOF'
+   ## Summary
+   - 변경 이유 / 해결한 문제
+
+   ## Test plan
+   - [ ] 확인 항목
+   EOF
+   )"
+   ```
 
 ## PR 본문 템플릿
 
@@ -56,6 +88,7 @@ gh auth login
 
 ## 주의
 
-- `git push` 가 403 이면 `gh auth login` 으로 racgoo 계정 재인증
-- force push, `--no-verify`, `--amend` (이미 push한 경우) 는 사용자 명시 허락 없이 금지
-- main/master 브랜치에 직접 push 금지
+- `git push` 가 403이면 `gh auth login`으로 racgoo 계정 재인증
+- force push, `--no-verify`, `--amend` (이미 push한 경우)는 사용자 명시 허락 없이 금지
+- `main`에 직접 push 금지 — 반드시 PR 경유
+- `hotfix`는 예외적으로 `main` 직접 PR 허용 (develop에도 반드시 cherry-pick)
