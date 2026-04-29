@@ -1,7 +1,7 @@
 import * as babel from "@babel/core";
 import { Environment } from "../utils/enviroment.js";
 import Extractor from "../utils/extractor.js";
-import { DEVELOPMENT_MODE, TRACE_MARKER, TRACE_ZONE } from "./scry.constant.js";
+import { ACTIVE_TRACE_ID_SET, DEVELOPMENT_MODE, TRACE_MARKER, TRACE_ZONE } from "./scry.constant.js";
 
 //Checkers for scry babel plugin
 class ScryChecker {
@@ -211,9 +211,12 @@ class ScryChecker {
         this.t.isIdentifier(parent.node.left.object.property, {
           name: "root",
         }) &&
-        // this.t.isStringLiteral(parent.node.left.property, {
-        //   value: ACTIVE_TRACE_ID_SET,
-        // }) &&
+        // Re-enabled: narrowed to ACTIVE_TRACE_ID_SET only.
+        // Any Zone.root[x] = new X() was previously skipped; now only the
+        // exact scry-generated initialisation is skipped.
+        this.t.isStringLiteral(parent.node.left.property, {
+          value: ACTIVE_TRACE_ID_SET,
+        }) &&
         parent.node.left.computed
       ) {
         parent.skip();

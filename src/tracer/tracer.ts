@@ -73,9 +73,15 @@ class Tracer {
     //in Promise, return value is resolved when 'then' trigger
     //in Object, return value is resolved automatically when context is done
     const asyncTaskLoading = this.recorder.waitAllContextDone(endBundleId);
-    //Wait for all return values to be resolved
     asyncTaskLoading
-      .then(async () => {
+      .then(async (completed) => {
+        if (!completed) {
+          Output.printError(
+            "Tracer.end(): some async traces did not complete before the timeout. " +
+            "The report may be incomplete. Consider increasing the timeout or " +
+            "ensuring all async operations finish before calling Tracer.end()."
+          );
+        }
         //Get current bundle details
         const currentBundleDetails =
           this.recorder.getBundleMap().get(endBundleId)?.details || [];
