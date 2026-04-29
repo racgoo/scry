@@ -316,7 +316,10 @@ class ScryAst {
     }
   }
 
-  // Add Zone.root initialization code if not initialized(on Program level)
+  // Add Zone.root initialization code if not initialized(on Program level).
+  // Uses Object.assign to MERGE into the existing _properties object rather than
+  // replacing it entirely. A full assignment wipes any internal Zone.js fields
+  // that were already stored there, breaking Zone.js runtime behaviour.
   public createZoneRootInitialization(
     path: babel.NodePath<babel.types.Program>
   ) {
@@ -332,12 +335,32 @@ class ScryAst {
               ),
               this.t.identifier(ScryAstVariable._properties)
             ),
-            this.t.objectExpression([
-              this.t.objectProperty(
-                this.t.identifier(ScryAstVariable.traceContext),
-                this.t.identifier(ScryAstVariable.traceContext)
+            // Object.assign(Zone.root._properties ?? {}, { traceContext })
+            this.t.callExpression(
+              this.t.memberExpression(
+                this.t.identifier("Object"),
+                this.t.identifier("assign")
               ),
-            ])
+              [
+                this.t.logicalExpression(
+                  "??",
+                  this.t.memberExpression(
+                    this.t.memberExpression(
+                      this.t.identifier("Zone"),
+                      this.t.identifier("root")
+                    ),
+                    this.t.identifier(ScryAstVariable._properties)
+                  ),
+                  this.t.objectExpression([])
+                ),
+                this.t.objectExpression([
+                  this.t.objectProperty(
+                    this.t.identifier(ScryAstVariable.traceContext),
+                    this.t.identifier(ScryAstVariable.traceContext)
+                  ),
+                ]),
+              ]
+            )
           )
         ),
       ])
@@ -584,6 +607,10 @@ class ScryAst {
    * Generated code:
    *   if ((Zone.current._properties?._depth ?? 0) >= maxDepth) return <originalNode>;
    */
+  // Zone.js stores fork properties at zone._properties, not as direct own
+  // properties on the zone object. The previous code read Zone.current["_depth"]
+  // which always returned undefined (the zone object has no "_depth" property),
+  // making maxDepth effectively never trigger.
   public createMaxDepthGuard(
     maxDepth: number,
     originalNode: babel.types.CallExpression | babel.types.NewExpression
@@ -593,10 +620,14 @@ class ScryAst {
         ">=",
         this.t.logicalExpression(
           "??",
+          // Zone.current._properties?.["_depth"]
           this.t.optionalMemberExpression(
             this.t.memberExpression(
-              this.t.identifier("Zone"),
-              this.t.identifier("current")
+              this.t.memberExpression(
+                this.t.identifier("Zone"),
+                this.t.identifier("current")
+              ),
+              this.t.identifier(ScryAstVariable._properties)
             ),
             this.t.stringLiteral("_depth"),
             true,
@@ -722,17 +753,23 @@ class ScryAst {
                     ])
                   ),
                   //Track Zone nesting depth so the maxDepth guard can do an O(1) check.
-                  //Inherits parent depth via Zone.current._properties?._depth ?? 0 and adds 1.
+                  //Inherits parent depth via Zone.current._properties?.["_depth"] ?? 0 and adds 1.
+                  //Must read from _properties (not Zone.current directly) because Zone.js
+                  //stores fork properties at zone._properties, not as own zone properties.
                   this.t.objectProperty(
                     this.t.identifier("_depth"),
                     this.t.binaryExpression(
                       "+",
                       this.t.logicalExpression(
                         "??",
+                        // Zone.current._properties?.["_depth"]
                         this.t.optionalMemberExpression(
                           this.t.memberExpression(
-                            this.t.identifier("Zone"),
-                            this.t.identifier("current")
+                            this.t.memberExpression(
+                              this.t.identifier("Zone"),
+                              this.t.identifier("current")
+                            ),
+                            this.t.identifier(ScryAstVariable._properties)
                           ),
                           this.t.stringLiteral("_depth"),
                           true,
@@ -987,9 +1024,12 @@ class ScryAst {
     }
     //Create try block
     const tryBlock = this.t.blockStatement([resultAst]);
-    //Create catch clause: record the error as returnValue, emit exit event for observability,
-    //clean up the Zone entry to prevent memory leak, then rethrow to preserve original call semantics.
-    //Without rethrow, user try/catch blocks around traced functions would silently swallow errors.
+    // Catch clause: on synchronous throw the Zone.run callback propagates the
+    // error here. Without explicit exit/done emissions, activeTraceIdSet keeps
+    // the traceId until the timeout fires and the trace tree shows an incomplete
+    // node with no returnValue. We emit both events before rethrowing so the
+    // tracing infrastructure always sees a matched enter→exit→done sequence.
+    const fnName = this.getFunctionName(path);
     const catchClause = this.t.catchClause(
       this.t.identifier("error"),
       this.t.blockStatement([
@@ -1000,7 +1040,45 @@ class ScryAst {
             this.t.identifier("error")
           )
         ),
-        //Clean up Zone entry on error path to prevent memory leak
+        // Re-capture traceContext from the current (parent) Zone so that
+        // traceBundleId / parentTraceId are available for the events below.
+        this.t.variableDeclaration("let", [
+          this.t.variableDeclarator(
+            this.t.identifier(ScryAstVariable.traceContext),
+            this.t.memberExpression(
+              this.t.memberExpression(
+                this.t.memberExpression(
+                  this.t.identifier("Zone"),
+                  this.t.identifier("current")
+                ),
+                this.t.identifier(ScryAstVariable._properties)
+              ),
+              this.t.stringLiteral(ScryAstVariable.traceContext),
+              true
+            )
+          ),
+        ]),
+        // emit exit so the trace node records the error as its returnValue
+        this.t.expressionStatement(
+          this.emitTraceEvent(
+            this.getEventDetail(path, state, {
+              type: "exit",
+              fnName,
+              chained: false,
+            })
+          )
+        ),
+        // emit done so activeTraceIdSet is cleaned up without waiting for timeout
+        this.t.expressionStatement(
+          this.emitTraceEvent(
+            this.getEventDetail(path, state, {
+              type: "done",
+              fnName,
+              chained: false,
+            })
+          )
+        ),
+        // Clean up Zone entry on error path to prevent memory leak
         this.t.expressionStatement(
           this.t.unaryExpression(
             "delete",
@@ -1279,7 +1357,8 @@ class ScryAst {
     const callee = path.node.callee;
     let fnName = ANONYMOUS_FUNCTION_NAME;
     if (this.t.isIdentifier(callee)) {
-      fnName = callee.name;
+      // new Foo() → "new Foo", plain call foo() → "foo"
+      fnName = path.isNewExpression() ? `new ${callee.name}` : callee.name;
     } else if (
       this.t.isMemberExpression(callee) &&
       this.t.isIdentifier(callee.property)

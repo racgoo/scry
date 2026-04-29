@@ -33,7 +33,8 @@ class NodeStrategy implements RuntimeStrategyInterface {
     //Trace end date
     const now = dayjs().format(REPORT_FILE_DATE_FORMAT);
     //File path for result
-    const filePath = `${REPORT_DIR}/${TRACE_RESULT_FILE_NAME}:${now}.${TRACE_RESULT_FILE_EXTENSION}`;
+    // Colon is forbidden in Windows filenames; use underscore as separator.
+    const filePath = `${REPORT_DIR}/${TRACE_RESULT_FILE_NAME}_${now}.${TRACE_RESULT_FILE_EXTENSION}`;
     fs.writeFileSync(filePath, html);
     return filePath;
   }

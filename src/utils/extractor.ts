@@ -72,7 +72,14 @@ class Extractor {
     if (this.isMethod(instance, method)) {
       const ctor = instance!.constructor as object;
       if (this.methodCache.has(ctor)) {
-        return this.methodCache.get(ctor)!;
+        const cached = this.methodCache.get(ctor)!;
+        // If the current call also resolved a functionCode (from the func path
+        // above), merge it in — returning the cached entry directly would
+        // discard it and leave functionCode empty in the trace detail.
+        if (result.functionCode) {
+          return { ...cached, functionCode: result.functionCode };
+        }
+        return cached;
       }
       result.classCode = this.extractOriginCode(
         instance!.constructor.toString()

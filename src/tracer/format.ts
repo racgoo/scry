@@ -658,12 +658,12 @@ class Format {
           </div>
 
           <script>
-            const items = ${JSON.stringify(
-              flattenNodes(traceNodes),
-              (key, value) => {
-                if (key === "parent") return undefined;
-                return value;
-              }
+            const items = ${Format.safeStringify(
+              flattenNodes(traceNodes).map((n) => {
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { parent, ...rest } = n as TraceNode & { parent?: unknown };
+                return rest;
+              })
             )};
             
             function downloadHtml() {
@@ -679,7 +679,6 @@ class Format {
 
             function generateHtmlContent(node) {
               const callType = node.classCode ? "method" : "function";
-              console.log(node)
               return \`
                 <div class="trace-info">
                   <div class="detail-header">

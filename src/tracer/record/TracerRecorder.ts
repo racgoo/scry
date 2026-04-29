@@ -153,6 +153,20 @@ class TraceRecorder implements TraceRecorderInterface {
       globalThis.addEventListener(TRACE_EVENT_NAME, this.boundOnTrace);
     }
   }
+
+  /**
+   * destroy method.
+   * Removes the event listener registered in initEventListener.
+   * Call this in hot-reload / test teardown environments where a new
+   * TraceRecorder instance will be created, to prevent duplicate listeners.
+   */
+  public destroy() {
+    if (Environment.isNodeJS()) {
+      process.off(TRACE_EVENT_NAME, this.boundOnTrace);
+    } else {
+      globalThis.removeEventListener(TRACE_EVENT_NAME, this.boundOnTrace);
+    }
+  }
   /**
    * isAllContextDone method.
    * This method is used to check if all context is done.
@@ -173,6 +187,9 @@ class TraceRecorder implements TraceRecorderInterface {
    * Without a timeout, an unhandled async error can leave traceIds in activeTraceIdSet
    * forever because the "done" event is never emitted, causing this method to hang indefinitely.
    */
+  // Returns true when all contexts finished cleanly, false when the timeout
+  // fired before all done events arrived. Callers (Tracer.end) can use this to
+  // log a warning or annotate the report as potentially incomplete.
   public waitAllContextDone(
     bundleId: number,
     timeout = 5000
@@ -180,12 +197,12 @@ class TraceRecorder implements TraceRecorderInterface {
     return new Promise((resolve) => {
       const start = Date.now();
       const interval = setInterval(() => {
-        if (
-          this.isAllContextDone(bundleId) ||
-          Date.now() - start > timeout
-        ) {
-          resolve(true);
+        if (this.isAllContextDone(bundleId)) {
           clearInterval(interval);
+          resolve(true);
+        } else if (Date.now() - start > timeout) {
+          clearInterval(interval);
+          resolve(false);
         }
       }, WAIT_ALL_CONTEXT_DONE_INTERVAL);
     });
