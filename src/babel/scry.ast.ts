@@ -323,6 +323,38 @@ class ScryAst {
   public createZoneRootInitialization(
     path: babel.NodePath<babel.types.Program>
   ) {
+    // Build the Object.assign(...) call and mark it so the CallExpression.exit
+    // visitor (isDuplicateFunction check) skips re-instrumenting it.  Without
+    // this guard the injected call gets wrapped in a tracing IIFE that fires at
+    // module-load time, before Zone.root._properties.traceContext is populated,
+    // producing "Cannot read properties of undefined (reading 'traceBundleId')".
+    const assignCall = this.t.callExpression(
+      this.t.memberExpression(
+        this.t.identifier("Object"),
+        this.t.identifier("assign")
+      ),
+      [
+        this.t.logicalExpression(
+          "??",
+          this.t.memberExpression(
+            this.t.memberExpression(
+              this.t.identifier("Zone"),
+              this.t.identifier("root")
+            ),
+            this.t.identifier(ScryAstVariable._properties)
+          ),
+          this.t.objectExpression([])
+        ),
+        this.t.objectExpression([
+          this.t.objectProperty(
+            this.t.identifier(ScryAstVariable.traceContext),
+            this.t.identifier(ScryAstVariable.traceContext)
+          ),
+        ]),
+      ]
+    );
+    this.t.addComment(assignCall, "leading", ` ${TRACE_MARKER} `);
+
     path.node.body.unshift(
       this.t.blockStatement([
         this.t.expressionStatement(
@@ -335,32 +367,7 @@ class ScryAst {
               ),
               this.t.identifier(ScryAstVariable._properties)
             ),
-            // Object.assign(Zone.root._properties ?? {}, { traceContext })
-            this.t.callExpression(
-              this.t.memberExpression(
-                this.t.identifier("Object"),
-                this.t.identifier("assign")
-              ),
-              [
-                this.t.logicalExpression(
-                  "??",
-                  this.t.memberExpression(
-                    this.t.memberExpression(
-                      this.t.identifier("Zone"),
-                      this.t.identifier("root")
-                    ),
-                    this.t.identifier(ScryAstVariable._properties)
-                  ),
-                  this.t.objectExpression([])
-                ),
-                this.t.objectExpression([
-                  this.t.objectProperty(
-                    this.t.identifier(ScryAstVariable.traceContext),
-                    this.t.identifier(ScryAstVariable.traceContext)
-                  ),
-                ]),
-              ]
-            )
+            assignCall
           )
         ),
       ])
@@ -905,9 +912,19 @@ class ScryAst {
                           // would leave the traceId in activeTraceIdSet indefinitely
                           // (until the waitAllContextDone timeout fires).
                           [
+                            // onFulfilled: capture resolved value, emit exit then done
                             this.t.arrowFunctionExpression(
-                              [],
+                              [this.t.identifier("value")],
                               this.t.blockStatement([
+                                this.t.expressionStatement(
+                                  this.t.assignmentExpression(
+                                    "=",
+                                    this.t.identifier(
+                                      ScryAstVariable.returnValue
+                                    ),
+                                    this.t.identifier("value")
+                                  )
+                                ),
                                 this.t.variableDeclaration("let", [
                                   this.t.variableDeclarator(
                                     this.t.identifier(
@@ -933,6 +950,15 @@ class ScryAst {
                                 this.t.expressionStatement(
                                   this.emitTraceEvent(
                                     this.getEventDetail(path, state, {
+                                      type: "exit",
+                                      fnName: this.getFunctionName(path),
+                                      chained: false,
+                                    })
+                                  )
+                                ),
+                                this.t.expressionStatement(
+                                  this.emitTraceEvent(
+                                    this.getEventDetail(path, state, {
                                       type: "done",
                                       fnName: this.getFunctionName(path),
                                       chained: false,
@@ -941,10 +967,19 @@ class ScryAst {
                                 ),
                               ])
                             ),
-                            // onRejected: emit done even when the Promise rejects
+                            // onRejected: capture rejection reason, emit exit then done
                             this.t.arrowFunctionExpression(
-                              [],
+                              [this.t.identifier("reason")],
                               this.t.blockStatement([
+                                this.t.expressionStatement(
+                                  this.t.assignmentExpression(
+                                    "=",
+                                    this.t.identifier(
+                                      ScryAstVariable.returnValue
+                                    ),
+                                    this.t.identifier("reason")
+                                  )
+                                ),
                                 this.t.variableDeclaration("let", [
                                   this.t.variableDeclarator(
                                     this.t.identifier(
@@ -967,6 +1002,15 @@ class ScryAst {
                                     )
                                   ),
                                 ]),
+                                this.t.expressionStatement(
+                                  this.emitTraceEvent(
+                                    this.getEventDetail(path, state, {
+                                      type: "exit",
+                                      fnName: this.getFunctionName(path),
+                                      chained: false,
+                                    })
+                                  )
+                                ),
                                 this.t.expressionStatement(
                                   this.emitTraceEvent(
                                     this.getEventDetail(path, state, {

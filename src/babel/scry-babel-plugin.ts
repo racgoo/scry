@@ -317,14 +317,33 @@ function transformCall(
             t.identifier(ScryAstVariable.returnValue)
           )
         ),
-        t.expressionStatement(
-          scryAst.emitTraceEvent(
-            scryAst.getEventDetail(path, state, {
-              type: "exit",
-              fnName,
-              chained,
-            })
-          )
+        // For async functions returnValue is the Promise at this point; the
+        // real resolved/rejected value is emitted by the onFulfilled/onRejected
+        // callbacks registered inside craeteOriginCallExecutor. Only emit the
+        // synchronous exit event when the return value is NOT a Promise.
+        t.ifStatement(
+          t.unaryExpression(
+            "!",
+            t.logicalExpression(
+              "&&",
+              t.identifier(ScryAstVariable.returnValue),
+              t.memberExpression(
+                t.identifier(ScryAstVariable.returnValue),
+                t.identifier("then")
+              )
+            )
+          ),
+          t.blockStatement([
+            t.expressionStatement(
+              scryAst.emitTraceEvent(
+                scryAst.getEventDetail(path, state, {
+                  type: "exit",
+                  fnName,
+                  chained,
+                })
+              )
+            ),
+          ])
         ),
         t.returnStatement(t.identifier(ScryAstVariable.returnValue)),
       ]),
