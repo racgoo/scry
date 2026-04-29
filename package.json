@@ -11,6 +11,10 @@
     "./babel": {
       "import": "./dist/esm/babel/index.js",
       "require": "./dist/cjs/babel/index.cjs"
+    },
+    "./zone": {
+      "import": "./dist/esm/zone-init.js",
+      "require": "./dist/cjs/zone-init.cjs"
     }
   },
   "repository": {

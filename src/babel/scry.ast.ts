@@ -383,30 +383,38 @@ class ScryAst {
   }
 
   //Add Zone.js import or require statement(on Program level)
+  // Injects `@racgoo/scry/zone` instead of bare `zone.js` so that zone.js is
+  // resolved from scry's own node_modules, not from the consumer project root.
+  // This prevents "Failed to resolve import zone.js" in tools like Vite that
+  // resolve bare specifiers relative to the file that contains the import.
   public createZoneJSDeclaration(
     path: babel.NodePath<babel.types.Program>,
     esm: boolean
   ) {
     const scryChecker = new ScryChecker(this.t);
-    const zoneJSImported = scryChecker.isImportedWithoutVariableDeclaration(
-      path,
-      "zone.js",
-      esm
-    );
+    // Skip if the user already imported zone.js (bare or via scry/zone)
+    const zoneJSImported =
+      scryChecker.isImportedWithoutVariableDeclaration(path, "zone.js", esm) ||
+      scryChecker.isImportedWithoutVariableDeclaration(
+        path,
+        "@racgoo/scry/zone",
+        esm
+      );
     if (zoneJSImported) {
       return;
     }
     if (esm) {
-      //For esm target
       path.node.body.unshift(
-        this.t.importDeclaration([], this.t.stringLiteral("zone.js"))
+        this.t.importDeclaration(
+          [],
+          this.t.stringLiteral("@racgoo/scry/zone")
+        )
       );
     } else {
-      //For commonjs target
       path.node.body.unshift(
         this.t.expressionStatement(
           this.t.callExpression(this.t.identifier("require"), [
-            this.t.stringLiteral("zone.js/mix"),
+            this.t.stringLiteral("@racgoo/scry/zone"),
           ])
         )
       );
