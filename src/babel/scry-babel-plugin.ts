@@ -211,6 +211,12 @@ function scryBabelPlugin(
         try {
           const filename = state.filename ?? "";
           if (!isFileIncluded(filename, options)) return;
+          // If this node is a plugin-generated IIFE, skip it immediately.
+          // This is a direct WeakSet lookup — the most reliable guard.
+          if (scryChecker.isGeneratedIIFE(path.node)) {
+            path.skip();
+            return;
+          }
           transformCall(path, state, t, scryAst, scryChecker, maxDepth);
         } catch (error) {
           console.error("NewExpression.exit error:", error);
@@ -225,6 +231,11 @@ function scryBabelPlugin(
         try {
           const filename = state.filename ?? "";
           if (!isFileIncluded(filename, options)) return;
+          // If this node is a plugin-generated IIFE, skip it immediately.
+          if (scryChecker.isGeneratedIIFE(path.node)) {
+            path.skip();
+            return;
+          }
           transformCall(path, state, t, scryAst, scryChecker, maxDepth);
         } catch (error) {
           console.error("CallExpression.exit error:", error);
@@ -379,6 +390,10 @@ function transformCall(
   newNode.leadingComments = [
     { type: "CommentBlock", value: ` ${TRACE_MARKER} ` },
   ];
+
+  // Register the IIFE node in the WeakSet BEFORE calling replaceWith so that
+  // any re-traversal triggered by Babel immediately sees it as generated code.
+  scryChecker.registerGeneratedIIFE(newNode);
 
   // Call path.skip() BEFORE path.replaceWith() so that the re-queued path
   // already has shouldSkip=true when Babel's traversal context processes it.

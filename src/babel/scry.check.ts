@@ -6,8 +6,33 @@ import { ACTIVE_TRACE_ID_SET, DEVELOPMENT_MODE, TRACE_MARKER, TRACE_ZONE } from 
 //Checkers for scry babel plugin
 class ScryChecker {
   private t: typeof babel.types;
+
+  /**
+   * Tracks every IIFE CallExpression node that the plugin generates via
+   * path.replaceWith().  Using object identity (WeakSet) is more reliable
+   * than inspecting leadingComments, which can be cleared or re-ordered by
+   * Babel internals during traversal.  WeakSet entries are GC'd automatically
+   * when the node is no longer referenced, so there is no memory leak.
+   */
+  private readonly _generatedIIFENodes = new WeakSet<babel.types.Node>();
+
   constructor(t: typeof babel.types) {
     this.t = t;
+  }
+
+  /** Called by transformCall to register a freshly-created IIFE node. */
+  public registerGeneratedIIFE(node: babel.types.Node): void {
+    this._generatedIIFENodes.add(node);
+  }
+
+  /**
+   * Returns true when `node` is itself a plugin-generated IIFE.
+   * Use this in CallExpression.exit / NewExpression.exit as an early-exit
+   * guard so the IIFE is never re-instrumented even if path.skip() was
+   * somehow bypassed.
+   */
+  public isGeneratedIIFE(node: babel.types.Node): boolean {
+    return this._generatedIIFENodes.has(node);
   }
 
   //Check if the file is excluded
@@ -328,11 +353,27 @@ class ScryChecker {
     path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
   ) {
     const callee = path.node.callee;
+    if (!this.t.isIdentifier(callee) && !this.t.isMemberExpression(callee))
+      return false;
+    // Identifer-based JSX helpers produced by various transform pipelines:
+    //   _jsx / _jsxs / _jsxDEV  — Babel's standard React transform
+    //   jsx / jsxs / jsxDEV     — @emotion/react and automatic JSX runtime (no underscore)
+    //   createElement           — classic React.createElement shorthand
+    if (this.t.isIdentifier(callee)) {
+      const name = callee.name;
+      return (
+        name.startsWith("_jsx") ||  // _jsx, _jsxs, _jsxDEV
+        name === "jsx" ||
+        name === "jsxs" ||
+        name === "jsxDEV" ||
+        name === "createElement"
+      );
+    }
+    // React.createElement (legacy)
     return (
-      (this.t.isIdentifier(callee) && callee.name.startsWith("_jsx")) ||
-      (this.t.isMemberExpression(callee) &&
-        this.t.isIdentifier(callee.object) &&
-        callee.object.name === "React")
+      this.t.isMemberExpression(callee) &&
+      this.t.isIdentifier(callee.object) &&
+      callee.object.name === "React"
     );
   }
 
@@ -374,13 +415,15 @@ class ScryChecker {
   public isInsideGeneratedIIFE(path: babel.NodePath): boolean {
     let current: babel.NodePath | null = path.parentPath;
     while (current !== null) {
-      if (
-        (current.isCallExpression() || current.isNewExpression()) &&
-        (
-          current.node as babel.types.CallExpression | babel.types.NewExpression
-        ).leadingComments?.some((c) => c.value.includes(TRACE_MARKER))
-      ) {
-        return true;
+      if (current.isCallExpression() || current.isNewExpression()) {
+        const node =
+          current.node as babel.types.CallExpression | babel.types.NewExpression;
+        // Primary: WeakSet registry — reliable, object-identity based.
+        if (this._generatedIIFENodes.has(node)) return true;
+        // Secondary: leadingComments — backup in case of edge cases where the
+        // node object reference changed (e.g. deep clone by external plugin).
+        if (node.leadingComments?.some((c) => c.value.includes(TRACE_MARKER)))
+          return true;
       }
       current = current.parentPath;
     }
