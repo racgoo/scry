@@ -33,10 +33,30 @@
 const Z = globalThis as Record<string, unknown>;
 
 // CRITICAL for React 18+ Suspense + TanStack Query.  Without this,
-// zone.js's PromiseRejectionEvent patch routes UNHANDLED rejections
-// through its own `handleError → globalCallback` re-throw path, which
-// short-circuits React's <ErrorBoundary> and traps Suspense retry loops
-// into "Maximum update depth exceeded" forever.
+// every Promise constructed in user code becomes a `ZoneAwarePromise`.
+// React Suspense throws those Promises to suspend, then the router
+// retries them; each retry constructs ANOTHER ZoneAwarePromise wrapping
+// the same underlying work, the rejection re-fires through zone.js's
+// own globalCallback path, and we get "Maximum update depth exceeded"
+// inside <Transitioner> forever.  Disabling the Promise patch makes
+// `new Promise(...)` resolve to the native one, which Suspense and
+// React's error boundary both handle correctly.
+//
+// Trade-off: zone-context propagation across `.then()` boundaries is
+// no longer automatic.  In practice we don't depend on it — the babel
+// plugin captures parent traceId at the IIFE-wrap site and emits
+// enter/exit synchronously, and the recorder uses
+// `traceContext.traceBundleId` (a snapshot) rather than walking
+// Zone.current.  Sync code is unaffected.  Awaited inner calls still
+// work because each call site has its own IIFE wrapper that snapshots
+// the bundle id before awaiting.
+if (Z.__Zone_disable_ZoneAwarePromise === undefined) {
+  Z.__Zone_disable_ZoneAwarePromise = true;
+}
+// Also disable the unhandled-rejection re-throw path (defence in depth
+// — with ZoneAwarePromise disabled this should no longer fire, but if
+// some downstream lib re-enables it we still want the React-friendly
+// behaviour).
 if (Z.__Zone_disable_PromiseRejectionEvent === undefined) {
   Z.__Zone_disable_PromiseRejectionEvent = true;
 }
