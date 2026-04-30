@@ -9,6 +9,7 @@ import {
   runEmptyScope,
   runRepeatedInvocations,
   runArrowAndFnExpr,
+  runAwaitInArg,
 } from "./fixtures/userScenario.fixture.js";
 
 describe("Integration: real-world user scenarios", () => {
@@ -99,6 +100,20 @@ describe("Integration: real-world user scenarios", () => {
     // possible; otherwise it appears as anonymous.  Either way SOME entry
     // should exist for that call.
     expect(names.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // Regression: f(await x()) used to compile to a sync TRACE_ZONE.run arrow
+  // whose body still contained `await`, yielding
+  //   Uncaught SyntaxError: Unexpected reserved word
+  // Real-world report: Hoguma-console's `zipFiles(await someAsync())`.
+  it("compiles f(await x()) without SyntaxError and traces both calls", async () => {
+    const nodes = await traceRun(async () => {
+      const r = await runAwaitInArg();
+      expect(r).toBe(43);
+    });
+    const names = nodeNames(nodes);
+    expect(names).toContain("asyncSource");
+    expect(names).toContain("consume");
   });
 
   it("captures returnValue for traced calls", async () => {

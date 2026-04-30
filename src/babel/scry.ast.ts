@@ -905,7 +905,17 @@ class ScryAst {
       babel.types.CallExpression | babel.types.NewExpression
     >,
     state: babel.PluginPass,
-    chained: boolean
+    chained: boolean,
+    /**
+     * Whether the wrapping IIFE is async (caller is in an `await` context).
+     * When true, the inner `TRACE_ZONE.run(() => ...)` callback must also be
+     * async — otherwise any `await` that appears among `path.node.arguments`
+     * (e.g. `f(await x())` already-transformed) becomes a SyntaxError because
+     * `await` is a reserved word in non-async arrows.  Real-world report:
+     * Hoguma-console's `zipFiles(await someAsync())` blew up at runtime with
+     * "Unexpected reserved word".
+     */
+    awaitContext: boolean = false
   ) {
     const newExpression = path.isNewExpression && path.isNewExpression();
     const originalCallee = path.node.callee;
@@ -975,7 +985,6 @@ class ScryAst {
             [
               this.t.arrowFunctionExpression(
                 [],
-
                 this.t.blockStatement(
                   (
                   [
@@ -1144,6 +1153,9 @@ class ScryAst {
                   ),
                   ] as (babel.types.Statement | null)[]).filter(Boolean) as babel.types.Statement[]
                 ),
+                // async flag — true when the wrapping IIFE is async, so any
+                // `await` that survives in path.node.arguments is legal.
+                awaitContext
               ),
             ]
           )
