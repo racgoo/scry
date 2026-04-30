@@ -133,4 +133,18 @@ describe("Vite plugin: scryVitePlugin", () => {
     expect(plugin.name).toBe("scry-babel");
     expect(plugin.enforce).toBe("pre");
   });
+
+  // Regression: babel plugin must inject the transformed-file counter so
+  // Tracer.end()'s "did the plugin actually run?" diagnostic works.
+  it("transform output increments globalThis.__scryTransformedFileCount", () => {
+    const out = callTransform(
+      plugin,
+      `function f() { return 1; }`,
+      "/project/src/util.ts"
+    );
+    expect(out).not.toBeNull();
+    expect(out!.code).toMatch(
+      /__scryTransformedFileCount\s*=\s*\(\s*globalThis\.__scryTransformedFileCount\s*\|\|\s*0\s*\)\s*\+\s*1/
+    );
+  });
 });

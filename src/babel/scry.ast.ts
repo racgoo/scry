@@ -33,6 +33,34 @@ class ScryAst {
     );
   }
 
+  /**
+   * Inject a counter increment into the top of every transformed module:
+   *   globalThis.__scryTransformedFileCount =
+   *     (globalThis.__scryTransformedFileCount || 0) + 1;
+   *
+   * The counter is the smoking gun for "is my babel plugin actually
+   * running on user source files?" — pluginApplied=true alone only proves
+   * the @racgoo/scry runtime got loaded, not that we wrapped any user
+   * code in IIFEs.  Tracer.end()'s diagnostic message reads this counter
+   * and tells the user definitively whether the transform fired.
+   */
+  public createTransformedFileCounter() {
+    const target = this.t.memberExpression(
+      this.t.identifier(ScryAstVariable.globalThis),
+      this.t.identifier(ScryAstVariable.transformedFileCount),
+      false
+    );
+    return this.t.assignmentExpression(
+      "=",
+      target,
+      this.t.binaryExpression(
+        "+",
+        this.t.logicalExpression("||", target, this.t.numericLiteral(0)),
+        this.t.numericLiteral(1)
+      )
+    );
+  }
+
   public createTraceContextOptionalUpdater() {
     return this.t.blockStatement([
       this.t.ifStatement(

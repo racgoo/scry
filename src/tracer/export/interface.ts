@@ -16,6 +16,10 @@ interface TraceReportMeta {
   droppedNullBundle?: number;
   listenerKind?: "process" | "globalThis" | "none";
   pluginApplied?: boolean;
+  // Counter incremented in every transformed module body — proves whether
+  // the babel plugin actually ran on user source files (vs. just the
+  // runtime being loaded).  0 = plugin never ran.
+  transformedFiles?: number;
 }
 
 interface ExporterStrategyInterface {
