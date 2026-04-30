@@ -5,6 +5,19 @@
 // statement.  zone-init.ts itself imports "zone.js", so Zone is still
 // initialized.
 import "../zone-init.js";
+import { ScryAstVariable } from "../babel/scry.constant.js";
+
+// Defense in depth: also set the flag here, at module-evaluation time of
+// the Tracer module itself.  zone-init.js already does this, but if a
+// bundler's "sideEffects": false hint, an aggressive pre-bundler, or a
+// future refactor ever drops the side-effect import above, we still
+// want `import { Tracer }` to be sufficient — because Tracer.start /
+// Tracer.end are the ONLY public APIs that trigger checkPluginApplied,
+// and you cannot call them without first evaluating this module.
+(globalThis as unknown as { [k: string]: boolean })[
+  ScryAstVariable.pluginApplied
+] = true;
+
 import dayjs from "dayjs";
 // import Format from "./format.js";
 import { Output } from "../utils/output.js";
