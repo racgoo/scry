@@ -1,5 +1,4 @@
 import * as babel from "@babel/core";
-import { Environment } from "../utils/enviroment.js";
 import Extractor from "../utils/extractor.js";
 import { ACTIVE_TRACE_ID_SET, DEVELOPMENT_MODE, TRACE_MARKER, TRACE_ZONE } from "./scry.constant.js";
 
