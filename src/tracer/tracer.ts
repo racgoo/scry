@@ -103,6 +103,24 @@ class Tracer {
         //Get current bundle details
         const currentBundleDetails =
           this.recorder.getBundleMap().get(endBundleId)?.details || [];
+        // Surface the empty-tree case loudly so users don't stare at a
+        // "No traced calls were recorded" page wondering whether the plugin
+        // is broken.  The most common real cause is "the function I wrapped
+        // in start/end never actually got called during this trace window"
+        // — e.g. a probabilistic spawn inside setInterval.  Other possible
+        // causes (NODE_ENV not set to development at transform time, stale
+        // .vite/deps prebundle, plugin not in vite babel.plugins, etc.) are
+        // also worth flagging here.
+        if (currentBundleDetails.length === 0) {
+          Output.printError(
+            "Tracer.end(): no events were recorded for this bundle. " +
+              "Common causes: (1) the traced function was not invoked between " +
+              "Tracer.start() and Tracer.end(); (2) NODE_ENV !== 'development' " +
+              "at transform time; (3) the babel plugin is not active for this " +
+              "file; (4) Vite served a stale .vite/deps prebundle (try " +
+              "`rm -rf node_modules/.vite`)."
+          );
+        }
         //Make trace tree(hierarchical tree structure by call)
         const traceNodes: TraceNode[] =
           this.nodeGenerator.generateNodesWithTraceDetails(currentBundleDetails);
