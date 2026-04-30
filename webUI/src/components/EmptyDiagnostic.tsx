@@ -1,8 +1,10 @@
 import { useState } from "react";
 import type { TraceNode } from "../types/injection";
+import type { TraceMeta } from "../hooks/useInjectionMeta";
 
 interface Props {
   data: TraceNode[];
+  meta: TraceMeta;
 }
 
 // Shown when Tracer.end() produced zero root trace nodes.  Surfaces the raw
@@ -17,14 +19,36 @@ interface Props {
 //     latest scry runtime listener — emits dispatched but were never heard.
 //   • The bundler tree-shook the side-effect import and the recorder
 //     never registered (despite our package.json sideEffects allow-list).
-export function EmptyDiagnostic({ data }: Props) {
+export function EmptyDiagnostic({ data, meta }: Props) {
   const [showRaw, setShowRaw] = useState(false);
   const raw =
     typeof window !== "undefined" && typeof window.__INJECTION_DATA__ === "string"
       ? window.__INJECTION_DATA__
       : "(no __INJECTION_DATA__ on window)";
-  const meta =
-    typeof window !== "undefined" && (window as unknown as { __INJECTION_META__?: unknown }).__INJECTION_META__;
+
+  // Lead with the runtime diagnostic counters — they pinpoint the failure
+  // mode immediately:
+  //   rawEventCount === 0 + listener=globalThis → emit & listener live on
+  //     different globalThis objects (Vite prebundle quirk, fix:
+  //     `optimizeDeps.exclude: ["@racgoo/scry"]`) OR no IIFE was generated
+  //     at transform time (NODE_ENV=production / plugin not active).
+  //   rawEventCount > 0 + droppedNullBundle === rawEventCount → IIFE ran
+  //     but traceContext.traceBundleId stayed null (Tracer.start wasn't
+  //     called inside the function or zone propagation broke).
+  //   rawEventCount > 0 + droppedNullBundle < rawEventCount + tree empty →
+  //     wrong bundleId (multiple Tracer.end races, etc).
+  const r = meta.rawEventCount;
+  const d = meta.droppedNullBundle;
+  const verdict =
+    r === undefined
+      ? "diagnostics not available (older runtime)"
+      : r === 0
+      ? meta.listenerKind === "globalThis"
+        ? "Listener registered but received 0 events. Likely cause: emit and listener live on different `globalThis` objects (Vite prebundle), OR no IIFEs were generated at transform time. Try `optimizeDeps.exclude: [\"@racgoo/scry\"]` in vite.config and `rm -rf node_modules/.vite`."
+        : "Listener never registered. Tracer module probably never evaluated."
+      : r > 0 && d === r
+      ? "Listener heard events but every one had traceBundleId=null. Tracer.start() likely wasn't called in the same execution path, or zone propagation broke."
+      : `Listener heard ${r} events (${(d ?? 0)} rejected) but the bundle for this Tracer.end() got 0. The trace landed in a different bundleId — possible race with another Tracer.start/end pair.`;
 
   return (
     <div className="empty">
@@ -56,12 +80,41 @@ export function EmptyDiagnostic({ data }: Props) {
           <code>rm -rf node_modules/.vite</code> and restart dev.
         </li>
       </ul>
-      <p style={{ marginTop: "1rem", fontSize: "0.85rem" }}>
-        Diagnostic — <code>data.length</code>: <strong>{data.length}</strong>
-        {" · "}
-        meta:{" "}
-        <strong>{meta ? "present" : "missing"}</strong>
-      </p>
+      <div
+        style={{
+          marginTop: "1.25rem",
+          padding: "0.85rem 1rem",
+          background: "rgba(var(--primary-rgb), 0.08)",
+          border: "1px solid rgba(var(--primary-rgb), 0.3)",
+          borderRadius: "10px",
+          textAlign: "left",
+          maxWidth: "640px",
+          marginLeft: "auto",
+          marginRight: "auto",
+          fontSize: "0.85rem",
+        }}
+      >
+        <p style={{ margin: 0, fontWeight: 600, color: "var(--primary-light)" }}>
+          Verdict
+        </p>
+        <p style={{ margin: "0.4rem 0 0 0", color: "var(--text-primary)" }}>
+          {verdict}
+        </p>
+        <p
+          style={{
+            margin: "0.6rem 0 0 0",
+            color: "var(--text-secondary)",
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontSize: "0.75rem",
+          }}
+        >
+          data.length=<strong>{data.length}</strong>
+          {" · "}rawEvents=<strong>{r ?? "?"}</strong>
+          {" · "}droppedNullBundle=<strong>{d ?? "?"}</strong>
+          {" · "}listener=<strong>{meta.listenerKind ?? "?"}</strong>
+          {" · "}pluginApplied=<strong>{String(meta.pluginApplied ?? "?")}</strong>
+        </p>
+      </div>
       <button
         type="button"
         className="header-link"
