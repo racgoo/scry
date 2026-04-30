@@ -1,6 +1,8 @@
 # Scry — Claude/AI Agent Guidance
 
-Scry is a JavaScript/TypeScript execution flow tracer that instruments code at **compile time** (Babel AST plugin) and collects call graphs at **runtime** (Zone.js + event system).
+Scry is a JavaScript/TypeScript execution flow tracer that instruments code at **compile time** and collects call graphs at **runtime** (Zone.js + event system).
+
+The user-facing integration is the **Vite plugin** (`@racgoo/scry/vite`). Internally it runs the same babel transform we built (`src/babel/scry-babel-plugin.ts`), but the babel plugin is no longer publicly exported — the `react({ babel: { plugins: [...] } })` route silently no-ops in too many real configs and was the source of recurring "empty trace" bug reports.  Treat the babel module as an internal implementation detail, not a public API.
 
 > **Rule files** — single source of truth in `.cursor/rules/`, shared by Cursor (`alwaysApply: true`) and Claude Code (`@`-imports below).
 >
@@ -30,14 +32,15 @@ src/
     scry.ast.ts            AST node generators (ScryAst class)
     scry.check.ts          skip-condition checkers (ScryChecker class)
     scry.constant.ts       all string constants and ScryAstVariable map
-    index.ts               public exports: scryBabelPlugin, scryBabelPluginForESM/CJS
+    index.ts               internal exports (do NOT add to package.json `exports`)
+  vite/                # Vite plugin — the ONLY supported user integration
+    index.ts               registers a transform hook that calls the babel plugin
   tracer/              # Runtime tracer — collects and exports trace data
     tracer.ts              Tracer class (start / end public API)
     record/                TraceRecorder: listens to events, stores bundles
     node/                  NodeGenerator: builds call tree from flat event list
     zone/                  ZoneContext: updates Zone.current/_root at start/end
     export/                Exporter: renders HTML report, opens browser
-    format.ts              HTML/CSS string template for the report UI
   utils/
     extractor.ts           Extractor.extractCode() — extracts source from func.toString()
     enviroment.ts          isNodeJS() helper

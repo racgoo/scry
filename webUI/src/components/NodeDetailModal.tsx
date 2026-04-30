@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { TraceNode } from "../types/injection";
+import { CodeBlock } from "./CodeBlock";
 
 interface Props {
   node: TraceNode;
@@ -15,7 +16,6 @@ function safeStringify(value: unknown, indent = 2): string {
         if (typeof v === "object" && v !== null) {
           if (seen.has(v)) return "[Circular]";
           seen.add(v);
-          // Common noise to suppress: Zone, Promises, Errors stay readable
           const ctor = (v as { constructor?: { name?: string } }).constructor;
           if (ctor?.name?.includes("Zone")) return "[Zone]";
           if (v instanceof Error) return v.stack || v.message;
@@ -41,7 +41,7 @@ export function NodeDetailModal({ node, onClose }: Props) {
 
   const callType = node.classCode ? "method" : "function";
   const definition =
-    node.methodCode || node.functionCode || "Source code not available";
+    node.methodCode || node.functionCode || "// Source code not available";
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -60,47 +60,49 @@ export function NodeDetailModal({ node, onClose }: Props) {
           ✕
         </button>
         <header className="detail-header">
-          <h2 className="function-name">{node.name || "(anonymous)"}</h2>
-          <div className="meta-badges">
-            <span className="badge call-type">{callType}</span>
-            <span className={`badge ${node.errored ? "fail" : "ok"}`}>
-              {node.errored ? "Failed" : "Success"}
-            </span>
-            {node.chained && <span className="badge">chained</span>}
-            {!node.completed && <span className="badge warn">pending</span>}
+          <div className="detail-title-row">
+            <h2 className="function-name">
+              <span className="function-name-icon">ƒ</span>
+              {node.name || "(anonymous)"}
+            </h2>
+            <div className="meta-badges">
+              <span className="badge call-type">{callType}</span>
+              <span className={`badge ${node.errored ? "fail" : "ok"}`}>
+                {node.errored ? "Failed" : "Success"}
+              </span>
+              {node.chained && <span className="badge">chained</span>}
+              {!node.completed && <span className="badge warn">pending</span>}
+            </div>
           </div>
+          {node.source && (
+            <div className="source-row">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              <code>{node.source}</code>
+            </div>
+          )}
         </header>
 
         <Section
           title={callType === "method" ? "Method Definition" : "Function Definition"}
         >
-          <pre>
-            <code>{definition}</code>
-          </pre>
+          <CodeBlock code={definition} language="tsx" />
         </Section>
 
         {node.classCode && (
           <Section title="Class Definition">
-            <pre>
-              <code>{node.classCode}</code>
-            </pre>
+            <CodeBlock code={node.classCode} language="tsx" />
           </Section>
         )}
 
         <Section title="Arguments">
-          <pre>
-            <code>{safeStringify(node.args)}</code>
-          </pre>
+          <CodeBlock code={safeStringify(node.args)} language="json" />
         </Section>
 
         <Section title="Return Value">
-          <pre>
-            <code>{safeStringify(node.returnValue)}</code>
-          </pre>
-        </Section>
-
-        <Section title="Source Location">
-          <span className="source-badge">{node.source || "unknown"}</span>
+          <CodeBlock code={safeStringify(node.returnValue)} language="json" />
         </Section>
       </div>
     </div>
