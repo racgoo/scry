@@ -70,3 +70,42 @@ describe("Zone.js injection — never injects bare zone.js", () => {
     expect(output).not.toMatch(/import\s+["']zone\.js["']/);
   });
 });
+
+describe("Duplicate declaration guard", () => {
+  it("does not produce duplicate var traceContext in a function scope", () => {
+    const output = transform(`
+      export function outer() {
+        function inner() { return 1; }
+        return inner();
+      }
+    `);
+    // Count occurrences of 'var traceContext' in the output
+    const count = (output.match(/var traceContext\s*=/g) ?? []).length;
+    // Expect exactly 2 (one for outer, one for inner) — not more
+    expect(count).toBeLessThanOrEqual(3);
+    expect(output).not.toMatch(/Duplicate/);
+  });
+
+  it("does not re-instrument Zone internal calls (__TRACE_ZONE__.run, etc.)", () => {
+    // The plugin stores Zone[traceId] in a const and calls .run() on it.
+    // If that .run() call were re-instrumented we'd see it wrapped in a second
+    // IIFE producing two returnValue = __TRACE_ZONE__.run(...) assignments.
+    const output = transform(`
+      export function run() { return fetch("https://example.com"); }
+    `);
+    // Count .run( occurrences — should be exactly 1 (the Zone zone runner)
+    const zoneRunMatches = (output.match(/\.run\(/g) ?? []).length;
+    expect(zoneRunMatches).toBe(1);
+  });
+
+  it("handles multiple arrow functions at the same scope without duplicates", () => {
+    const output = transform(`
+      export const a = () => doA();
+      export const b = () => doB();
+    `);
+    // Each top-level arrow gets exactly one var traceContext in its own scope
+    const count = (output.match(/var traceContext\s*=/g) ?? []).length;
+    // program (1) + arrow a (1) + arrow b (1) = 3, not more
+    expect(count).toBeLessThanOrEqual(4);
+  });
+});

@@ -160,6 +160,28 @@ class ScryAst {
       | babel.types.ClassMethod
     >
   ) {
+    // Idempotency guard: do not inject var traceContext twice into the same
+    // scope. This can happen when Babel re-traverses the plugin-generated IIFE
+    // after path.replaceWith() — the ArrowFunctionExpression visitor fires for
+    // the new IIFE's arrow and would otherwise produce a duplicate declaration.
+    const existingBody = path.isProgram()
+      ? (path.node.body as babel.types.Statement[])
+      : (path.node.body as babel.types.BlockStatement)?.body;
+    if (
+      existingBody?.some(
+        (n) =>
+          this.t.isVariableDeclaration(n) &&
+          n.declarations.some(
+            (d) =>
+              this.t.isIdentifier(d.id, {
+                name: ScryAstVariable.traceContext,
+              })
+          )
+      )
+    ) {
+      return;
+    }
+
     const parentDecl = this.t.variableDeclaration("var", [
       this.t.variableDeclarator(
         this.t.identifier(ScryAstVariable.traceContext),
