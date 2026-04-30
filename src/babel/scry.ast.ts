@@ -1030,6 +1030,77 @@ class ScryAst {
                       )
                     ),
                     this.t.blockStatement([
+                      // Hoist the post-settlement callback into a single arrow
+                      // so the (huge) exit/done emit code is emitted ONCE per
+                      // traced call instead of duplicated across onFulfilled
+                      // and onRejected.  Both branches share the same shape:
+                      //   1. assign returnValue from the settled value
+                      //   2. re-capture traceContext from the parent zone
+                      //   3. emit exit, emit done
+                      // Note: Promise.then(fn, fn) is intentional — the same
+                      // arrow handles both resolved and rejected paths.  The
+                      // settled value (resolution OR rejection reason) flows
+                      // into emit detail via returnValue, so consumers can
+                      // distinguish outcomes if needed.
+                      this.t.variableDeclaration("const", [
+                        this.t.variableDeclarator(
+                          this.t.identifier("__scry_settle"),
+                          this.t.arrowFunctionExpression(
+                            [this.t.identifier("v")],
+                            this.t.blockStatement([
+                              this.t.expressionStatement(
+                                this.t.assignmentExpression(
+                                  "=",
+                                  this.t.identifier(
+                                    ScryAstVariable.returnValue
+                                  ),
+                                  this.t.identifier("v")
+                                )
+                              ),
+                              this.t.variableDeclaration("let", [
+                                this.t.variableDeclarator(
+                                  this.t.identifier(
+                                    ScryAstVariable.traceContext
+                                  ),
+                                  this.t.memberExpression(
+                                    this.t.memberExpression(
+                                      this.t.memberExpression(
+                                        this.t.identifier("Zone"),
+                                        this.t.identifier("current")
+                                      ),
+                                      this.t.identifier(
+                                        ScryAstVariable._properties
+                                      )
+                                    ),
+                                    this.t.stringLiteral(
+                                      ScryAstVariable.traceContext
+                                    ),
+                                    true
+                                  )
+                                ),
+                              ]),
+                              this.t.expressionStatement(
+                                this.emitTraceEvent(
+                                  this.getEventDetail(path, state, {
+                                    type: "exit",
+                                    fnName: this.getFunctionName(path),
+                                    chained: false,
+                                  })
+                                )
+                              ),
+                              this.t.expressionStatement(
+                                this.emitTraceEvent(
+                                  this.getEventDetail(path, state, {
+                                    type: "done",
+                                    fnName: this.getFunctionName(path),
+                                    chained: false,
+                                  })
+                                )
+                              ),
+                            ])
+                          )
+                        ),
+                      ]),
                       this.t.expressionStatement(
                         this.t.callExpression(
                           this.t.memberExpression(
@@ -1038,122 +1109,12 @@ class ScryAst {
                             ),
                             this.t.identifier("then")
                           ),
-                          // Pass both onFulfilled and onRejected so that a rejected
-                          // Promise still emits the done event and cleans up
-                          // activeTraceIdSet. Without onRejected, rejected Promises
-                          // would leave the traceId in activeTraceIdSet indefinitely
-                          // (until the waitAllContextDone timeout fires).
+                          // Pass the same arrow as both onFulfilled and
+                          // onRejected so a rejected Promise still emits
+                          // exit/done and cleans up activeTraceIdSet.
                           [
-                            // onFulfilled: capture resolved value, emit exit then done
-                            this.t.arrowFunctionExpression(
-                              [this.t.identifier("value")],
-                              this.t.blockStatement([
-                                this.t.expressionStatement(
-                                  this.t.assignmentExpression(
-                                    "=",
-                                    this.t.identifier(
-                                      ScryAstVariable.returnValue
-                                    ),
-                                    this.t.identifier("value")
-                                  )
-                                ),
-                                this.t.variableDeclaration("let", [
-                                  this.t.variableDeclarator(
-                                    this.t.identifier(
-                                      ScryAstVariable.traceContext
-                                    ),
-                                    this.t.memberExpression(
-                                      this.t.memberExpression(
-                                        this.t.memberExpression(
-                                          this.t.identifier("Zone"),
-                                          this.t.identifier("current")
-                                        ),
-                                        this.t.identifier(
-                                          ScryAstVariable._properties
-                                        )
-                                      ),
-                                      this.t.stringLiteral(
-                                        ScryAstVariable.traceContext
-                                      ),
-                                      true
-                                    )
-                                  ),
-                                ]),
-                                this.t.expressionStatement(
-                                  this.emitTraceEvent(
-                                    this.getEventDetail(path, state, {
-                                      type: "exit",
-                                      fnName: this.getFunctionName(path),
-                                      chained: false,
-                                    })
-                                  )
-                                ),
-                                this.t.expressionStatement(
-                                  this.emitTraceEvent(
-                                    this.getEventDetail(path, state, {
-                                      type: "done",
-                                      fnName: this.getFunctionName(path),
-                                      chained: false,
-                                    })
-                                  )
-                                ),
-                              ])
-                            ),
-                            // onRejected: capture rejection reason, emit exit then done
-                            this.t.arrowFunctionExpression(
-                              [this.t.identifier("reason")],
-                              this.t.blockStatement([
-                                this.t.expressionStatement(
-                                  this.t.assignmentExpression(
-                                    "=",
-                                    this.t.identifier(
-                                      ScryAstVariable.returnValue
-                                    ),
-                                    this.t.identifier("reason")
-                                  )
-                                ),
-                                this.t.variableDeclaration("let", [
-                                  this.t.variableDeclarator(
-                                    this.t.identifier(
-                                      ScryAstVariable.traceContext
-                                    ),
-                                    this.t.memberExpression(
-                                      this.t.memberExpression(
-                                        this.t.memberExpression(
-                                          this.t.identifier("Zone"),
-                                          this.t.identifier("current")
-                                        ),
-                                        this.t.identifier(
-                                          ScryAstVariable._properties
-                                        )
-                                      ),
-                                      this.t.stringLiteral(
-                                        ScryAstVariable.traceContext
-                                      ),
-                                      true
-                                    )
-                                  ),
-                                ]),
-                                this.t.expressionStatement(
-                                  this.emitTraceEvent(
-                                    this.getEventDetail(path, state, {
-                                      type: "exit",
-                                      fnName: this.getFunctionName(path),
-                                      chained: false,
-                                    })
-                                  )
-                                ),
-                                this.t.expressionStatement(
-                                  this.emitTraceEvent(
-                                    this.getEventDetail(path, state, {
-                                      type: "done",
-                                      fnName: this.getFunctionName(path),
-                                      chained: false,
-                                    })
-                                  )
-                                ),
-                              ])
-                            ),
+                            this.t.identifier("__scry_settle"),
+                            this.t.identifier("__scry_settle"),
                           ]
                         )
                       ),
