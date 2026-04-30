@@ -150,6 +150,11 @@ function scryBabelPlugin(
           path.node.body.unshift(
             t.expressionStatement(scryAst.createPluginAppliedVariable())
           );
+          // Bump the transformed-file counter — Tracer.end() reads this to
+          // tell users whether their files actually got instrumented.
+          path.node.body.unshift(
+            t.expressionStatement(scryAst.createTransformedFileCounter())
+          );
 
           scryAst.createZoneRootInitialization(path);
           scryAst.createTraceConextDeclare(path);

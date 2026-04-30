@@ -66,4 +66,9 @@ export const ScryAstVariable = {
   processedArgs: "processedArgs",
   //plugin applied(for tracer, if plugin is applied, it's declared)
   pluginApplied: "scryPluginApplied",
+  //counter incremented in EVERY transformed module body — used by
+  //Tracer.end()'s diagnostic to confirm whether the babel plugin actually
+  //ran on user source files.  pluginApplied=true alone only proves the
+  //runtime is loaded; this counter proves user files were instrumented.
+  transformedFileCount: "__scryTransformedFileCount",
 } as const;

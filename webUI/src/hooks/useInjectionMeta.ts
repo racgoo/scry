@@ -8,6 +8,7 @@ export interface TraceMeta {
   droppedNullBundle?: number;
   listenerKind?: "process" | "globalThis" | "none";
   pluginApplied?: boolean;
+  transformedFiles?: number;
 }
 
 const FALLBACK: TraceMeta = {

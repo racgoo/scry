@@ -39,20 +39,17 @@ export function EmptyDiagnostic({ data, meta }: Props) {
   //     wrong bundleId (multiple Tracer.end races, etc).
   const r = meta.rawEventCount;
   const d = meta.droppedNullBundle;
+  const tf = meta.transformedFiles;
   const verdict =
     r === undefined
       ? "Diagnostics not available (older runtime)."
+      : tf === 0
+      ? // DEFINITIVE: babel plugin counter is 0 ⇒ no user file was wrapped.
+        'CONFIRMED: the scry babel plugin DID NOT RUN on any of your files (transformedFiles=0). Your vite.config is not wired correctly.\n\nFix:\n\n  import { scryVitePlugin } from "@racgoo/scry/vite";\n  import react from "@vitejs/plugin-react";\n  export default { plugins: [scryVitePlugin(), react()] };\n\nThen rm -rf node_modules/.vite and restart dev.'
+      : r === 0 && (tf ?? 0) > 0
+      ? `The babel plugin ran on ${tf} file(s), but the file calling Tracer.start/end isn't one of them. Either an \`exclude\` rule covers it, or Vite served it from a stale \`.vite/deps\` prebundle (try \`rm -rf node_modules/.vite\` and restart).`
       : r === 0
-      ? meta.pluginApplied
-        ? // The most common real-world failure: scry runtime is loaded
-          // (pluginApplied=true) but the user's source files were never
-          // wrapped in IIFEs by the babel plugin.  This usually means
-          // `@vitejs/plugin-react`'s babel config didn't end up running
-          // scryBabelPlugin (custom babel.config.js, plugin order, etc).
-          'Your source files are NOT being transformed by the scry babel plugin (rawEvents=0 but pluginApplied=true). The most reliable fix is to use the dedicated Vite plugin instead of routing through @vitejs/plugin-react: \n\nimport { scryVitePlugin } from "@racgoo/scry/vite";\nexport default { plugins: [scryVitePlugin(), react()] };\n\nThen: rm -rf node_modules/.vite && restart dev.'
-        : meta.listenerKind === "globalThis"
-        ? "Listener registered but received 0 events AND pluginApplied=false. The scry runtime probably never evaluated — check that `@racgoo/scry` is actually imported."
-        : "Listener never registered. Tracer module probably never evaluated."
+      ? "Listener never registered. The Tracer module probably never evaluated — make sure `@racgoo/scry` is actually imported somewhere."
       : r > 0 && d === r
       ? "Listener heard events but every one had traceBundleId=null. Tracer.start() likely wasn't called in the same execution path, or zone propagation broke."
       : `Listener heard ${r} events (${(d ?? 0)} rejected) but the bundle for this Tracer.end() got 0. The trace landed in a different bundleId — possible race with another Tracer.start/end pair.`;
@@ -104,9 +101,17 @@ export function EmptyDiagnostic({ data, meta }: Props) {
         <p style={{ margin: 0, fontWeight: 600, color: "var(--primary-light)" }}>
           Verdict
         </p>
-        <p style={{ margin: "0.4rem 0 0 0", color: "var(--text-primary)" }}>
+        <pre
+          style={{
+            margin: "0.4rem 0 0 0",
+            color: "var(--text-primary)",
+            whiteSpace: "pre-wrap",
+            fontFamily: "inherit",
+            fontSize: "inherit",
+          }}
+        >
           {verdict}
-        </p>
+        </pre>
         <p
           style={{
             margin: "0.6rem 0 0 0",
@@ -116,6 +121,7 @@ export function EmptyDiagnostic({ data, meta }: Props) {
           }}
         >
           data.length=<strong>{data.length}</strong>
+          {" · "}transformedFiles=<strong>{tf ?? "?"}</strong>
           {" · "}rawEvents=<strong>{r ?? "?"}</strong>
           {" · "}droppedNullBundle=<strong>{d ?? "?"}</strong>
           {" · "}listener=<strong>{meta.listenerKind ?? "?"}</strong>

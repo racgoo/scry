@@ -114,6 +114,14 @@ class Tracer {
         if (currentBundleDetails.length === 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const r = this.recorder as any;
+          // The babel plugin injects a counter increment at the top of
+          // every module body it transforms.  Reading it here tells us
+          // DEFINITIVELY whether user files got instrumented:
+          //   transformedFiles === 0 → babel plugin never ran on user code
+          //   transformedFiles >  0 → it ran on N user files
+          const transformedFiles =
+            (globalThis as { __scryTransformedFileCount?: number })
+              .__scryTransformedFileCount ?? 0;
           const diag =
             ` [diagnostics: rawEvents=${r._rawEventCount ?? "?"} ` +
             `droppedNullBundle=${r._droppedNullBundle ?? "?"} ` +
@@ -121,7 +129,8 @@ class Tracer {
             `pluginApplied=${
               (globalThis as { scryPluginApplied?: boolean })
                 .scryPluginApplied === true
-            }]`;
+            } ` +
+            `transformedFiles=${transformedFiles}]`;
           // rawEvents > 0 && droppedNullBundle === rawEvents:
           //   listener heard them but they had traceBundleId=null
           //   → Tracer.start was not called or the IIFE's traceContext
@@ -133,22 +142,32 @@ class Tracer {
           //   different globalThis objects (rare; usually a Vite
           //   `optimizeDeps` quirk — try `optimizeDeps.exclude:
           //   ["@racgoo/scry"]`).
-          // rawEvents=0 + pluginApplied=true is the classic "scry runtime
-          // is loaded, but the user's source files were never transformed"
-          // signature.  The most reliable fix is to use the dedicated Vite
-          // plugin instead of trying to wedge the babel plugin into
-          // @vitejs/plugin-react's babel pipeline (which silently no-ops
-          // in many real configs).
-          const transformLikelyMissing =
-            r._rawEventCount === 0 &&
-            (globalThis as { scryPluginApplied?: boolean })
-              .scryPluginApplied === true;
-          const transformHint = transformLikelyMissing
-            ? " ★ Most likely cause: your source files are NOT being transformed by the scry babel plugin (rawEvents=0 + pluginApplied=true). " +
-              "Switch your vite.config to use the dedicated Vite plugin: " +
-              "`import { scryVitePlugin } from \"@racgoo/scry/vite\"; export default { plugins: [scryVitePlugin(), react()] }`. " +
-              "It transforms .ts/.tsx/.js/.jsx directly and is independent of @vitejs/plugin-react's babel config."
-            : "";
+          // CONFIRMED: babel plugin never ran on a single user file.
+          //   → vite.config / babel config is wrong.  Switch to the
+          //     dedicated Vite plugin (one-line fix).
+          const noTransformAtAll = transformedFiles === 0;
+          // PROBABLE: ran on some files but not the one calling Tracer.
+          //   → most likely .vite/deps cache or an `exclude` rule that
+          //     happens to match the user's file.
+          const partialTransformOnly =
+            !noTransformAtAll && r._rawEventCount === 0;
+
+          let transformHint = "";
+          if (noTransformAtAll) {
+            transformHint =
+              " ★★ CONFIRMED: the scry babel plugin DID NOT RUN on any of your files (transformedFiles=0). " +
+              "Your vite.config is not wired correctly. Fix:\n\n" +
+              '  import { scryVitePlugin } from "@racgoo/scry/vite";\n' +
+              '  import react from "@vitejs/plugin-react";\n' +
+              "  export default { plugins: [scryVitePlugin(), react()] };\n\n" +
+              "Then `rm -rf node_modules/.vite` and restart dev. " +
+              "This counter is incremented once per transformed module — if it's 0, the plugin definitely never ran.";
+          } else if (partialTransformOnly) {
+            transformHint =
+              ` ★ The babel plugin ran on ${transformedFiles} file(s), but the file calling Tracer.start/end isn't one of them. ` +
+              "Likely causes: your vite plugin's `exclude` rule covers this path, or Vite served the file from a stale `.vite/deps` prebundle " +
+              "(try `rm -rf node_modules/.vite` and restart).";
+          }
           Output.printError(
             "Tracer.end(): no events were recorded for this bundle. " +
               "Common causes: (1) the traced function was not invoked between " +
@@ -188,6 +207,9 @@ class Tracer {
           pluginApplied:
             (globalThis as { scryPluginApplied?: boolean })
               .scryPluginApplied === true,
+          transformedFiles:
+            (globalThis as { __scryTransformedFileCount?: number })
+              .__scryTransformedFileCount ?? 0,
         });
       })
       .catch((error: unknown) => {
