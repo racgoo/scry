@@ -1,4 +1,3 @@
-import dayjs from "dayjs";
 import { TraceEvent } from "./constant.js";
 
 /**
@@ -42,7 +41,12 @@ interface TraceDetail {
 interface TraceBundle {
   description: string;
   details: TraceDetail[];
-  startTime: dayjs.Dayjs;
+  // startTime is captured as a millisecond epoch (Date.now()) so the
+  // recorder has zero runtime dependencies and survives Vite's
+  // optimizeDeps prebundler / cjs-esm interop edge cases.  Was
+  // previously dayjs.Dayjs which forced consumers to deal with dayjs's
+  // cjs default export when they excluded scry from prebundling.
+  startTime: number;
   duration: number;
   activeTraceIdSet: Set<number>;
 }

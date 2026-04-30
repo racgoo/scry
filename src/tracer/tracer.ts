@@ -18,7 +18,6 @@ import { ScryAstVariable } from "../babel/scry.constant.js";
   ScryAstVariable.pluginApplied
 ] = true;
 
-import dayjs from "dayjs";
 // import Format from "./format.js";
 import { Output } from "../utils/output.js";
 import { TraceNode } from "./node/type.js";
@@ -138,10 +137,8 @@ class Tracer {
           // rawEvents === 0:
           //   no listener received anything.  Either nothing emitted
           //   (transform skipped entirely → check NODE_ENV / plugin
-          //   wiring / stale .vite/deps) or emit & listener live on
-          //   different globalThis objects (rare; usually a Vite
-          //   `optimizeDeps` quirk — try `optimizeDeps.exclude:
-          //   ["@racgoo/scry"]`).
+          //   wiring / stale .vite/deps) or the recorder was never
+          //   created (Tracer module never evaluated).
           // CONFIRMED: babel plugin never ran on a single user file.
           //   → vite.config / babel config is wrong.  Switch to the
           //     dedicated Vite plugin (one-line fix).
@@ -174,9 +171,7 @@ class Tracer {
               "Tracer.start() and Tracer.end(); (2) NODE_ENV === 'production' " +
               "at transform time; (3) the babel plugin is not active for this " +
               "file; (4) Vite served a stale .vite/deps prebundle (try " +
-              "`rm -rf node_modules/.vite` and restart dev); " +
-              "(5) emit & listener live on different `globalThis` objects " +
-              "(try Vite `optimizeDeps.exclude: [\"@racgoo/scry\"]`)." +
+              "`rm -rf node_modules/.vite` and restart dev)." +
               transformHint +
               diag
           );
@@ -184,11 +179,10 @@ class Tracer {
         //Make trace tree(hierarchical tree structure by call)
         const traceNodes: TraceNode[] =
           this.nodeGenerator.generateNodesWithTraceDetails(currentBundleDetails);
-        //Update duration
-        this.recorder.getBundleMap().get(endBundleId)!.duration = dayjs().diff(
-          this.recorder.getBundleMap().get(endBundleId)!.startTime,
-          "ms"
-        );
+        //Update duration (ms)
+        this.recorder.getBundleMap().get(endBundleId)!.duration =
+          Date.now() -
+          this.recorder.getBundleMap().get(endBundleId)!.startTime;
 
         // Render the trace via the React WebUI (single-file build embedded
         // at package build time).  Pass both the tree and the report meta
@@ -199,7 +193,7 @@ class Tracer {
         const r = this.recorder as any;
         this.exporter.export(traceNodes, {
           description: bundle.description,
-          startTimeISO: bundle.startTime.toISOString(),
+          startTimeISO: new Date(bundle.startTime).toISOString(),
           durationMs: bundle.duration,
           rawEventCount: r._rawEventCount,
           droppedNullBundle: r._droppedNullBundle,

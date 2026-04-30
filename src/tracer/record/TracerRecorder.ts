@@ -1,4 +1,3 @@
-import dayjs from "dayjs";
 import { TraceBundle, TraceDetail } from "./type.js";
 import { Output } from "../../utils/output.js";
 import { TraceEvent, WAIT_ALL_CONTEXT_DONE_INTERVAL } from "./constant.js";
@@ -72,7 +71,7 @@ class TraceRecorder implements TraceRecorderInterface {
     this.bundleMap.set(bundleId, {
       description: description || "",
       details: [],
-      startTime: dayjs(),
+      startTime: Date.now(),
       duration: 0,
       activeTraceIdSet: new Set(),
     });
