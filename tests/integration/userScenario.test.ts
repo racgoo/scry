@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { traceRun, nodeNames, findNode } from "./helpers.js";
+import { Environment } from "../../src/utils/enviroment.js";
 import {
   runMathBuiltins,
   runJsonBuiltins,
@@ -149,6 +150,30 @@ describe("Integration: browser emit path", () => {
       (globalThis as Record<string, unknown>).dispatchEvent = origDispatch;
     if (origAddListener !== undefined)
       (globalThis as Record<string, unknown>).addEventListener = origAddListener;
+  });
+
+  it("isNodeJS does not return true when only `process` polyfill is present", () => {
+    // Simulate Vite's `define: { "process.env.NODE_ENV": ... }` which exposes
+    // process but no real Node runtime, alongside a window.  Previously this
+    // could route the exporter down the Node strategy and crash.
+    const origWindow = (globalThis as Record<string, unknown>).window;
+    const origDocument = (globalThis as Record<string, unknown>).document;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (globalThis as any).window = {
+        addEventListener: () => {},
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (globalThis as any).document = {};
+      expect(Environment.isNodeJS()).toBe(false);
+    } finally {
+      if (origWindow === undefined)
+        delete (globalThis as Record<string, unknown>).window;
+      else (globalThis as Record<string, unknown>).window = origWindow;
+      if (origDocument === undefined)
+        delete (globalThis as Record<string, unknown>).document;
+      else (globalThis as Record<string, unknown>).document = origDocument;
+    }
   });
 
   it("dispatches CustomEvent with full detail when window is present", async () => {
