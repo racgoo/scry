@@ -2,6 +2,11 @@
 
 Scry is a JavaScript/TypeScript execution flow tracer that instruments code at **compile time** (Babel AST plugin) and collects call graphs at **runtime** (Zone.js + event system).
 
+> **Rule files** (also used by Cursor — read these for detailed conventions):
+> - [.cursor/rules/project-overview.mdc](.cursor/rules/project-overview.mdc) — project structure, core constraints, build commands
+> - [.cursor/rules/babel-plugin.mdc](.cursor/rules/babel-plugin.mdc) — generated IIFE structure, AST authoring rules, skip conditions
+> - [.cursor/rules/git-workflow.mdc](.cursor/rules/git-workflow.mdc) — branch strategy, commit/PR procedure, safety rules
+
 ---
 
 ## Build & Run
@@ -63,6 +68,8 @@ Source code
 
 ## Plugin Conventions
 
+See [.cursor/rules/babel-plugin.mdc](.cursor/rules/babel-plugin.mdc) for full rules. Summary:
+
 - Every `CallExpression.exit` visitor call generates an IIFE with:
   1. `traceId` (global auto-increment counter)
   2. `Zone.fork()` with `traceContext` and `_depth` (for maxDepth guard)
@@ -90,6 +97,8 @@ Source code
 4. Always run `node node_modules/typescript/bin/tsc --noEmit` before committing
 
 ## Git Workflow
+
+See [.cursor/rules/git-workflow.mdc](.cursor/rules/git-workflow.mdc) for full procedure. Summary:
 
 ### Branch Strategy (GitFlow Lite)
 
