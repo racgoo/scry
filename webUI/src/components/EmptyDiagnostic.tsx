@@ -41,10 +41,17 @@ export function EmptyDiagnostic({ data, meta }: Props) {
   const d = meta.droppedNullBundle;
   const verdict =
     r === undefined
-      ? "diagnostics not available (older runtime)"
+      ? "Diagnostics not available (older runtime)."
       : r === 0
-      ? meta.listenerKind === "globalThis"
-        ? "Listener registered but received 0 events. Likely cause: emit and listener live on different `globalThis` objects (Vite prebundle), OR no IIFEs were generated at transform time. Try `optimizeDeps.exclude: [\"@racgoo/scry\"]` in vite.config and `rm -rf node_modules/.vite`."
+      ? meta.pluginApplied
+        ? // The most common real-world failure: scry runtime is loaded
+          // (pluginApplied=true) but the user's source files were never
+          // wrapped in IIFEs by the babel plugin.  This usually means
+          // `@vitejs/plugin-react`'s babel config didn't end up running
+          // scryBabelPlugin (custom babel.config.js, plugin order, etc).
+          'Your source files are NOT being transformed by the scry babel plugin (rawEvents=0 but pluginApplied=true). The most reliable fix is to use the dedicated Vite plugin instead of routing through @vitejs/plugin-react: \n\nimport { scryVitePlugin } from "@racgoo/scry/vite";\nexport default { plugins: [scryVitePlugin(), react()] };\n\nThen: rm -rf node_modules/.vite && restart dev.'
+        : meta.listenerKind === "globalThis"
+        ? "Listener registered but received 0 events AND pluginApplied=false. The scry runtime probably never evaluated — check that `@racgoo/scry` is actually imported."
         : "Listener never registered. Tracer module probably never evaluated."
       : r > 0 && d === r
       ? "Listener heard events but every one had traceBundleId=null. Tracer.start() likely wasn't called in the same execution path, or zone propagation broke."

@@ -133,6 +133,22 @@ class Tracer {
           //   different globalThis objects (rare; usually a Vite
           //   `optimizeDeps` quirk — try `optimizeDeps.exclude:
           //   ["@racgoo/scry"]`).
+          // rawEvents=0 + pluginApplied=true is the classic "scry runtime
+          // is loaded, but the user's source files were never transformed"
+          // signature.  The most reliable fix is to use the dedicated Vite
+          // plugin instead of trying to wedge the babel plugin into
+          // @vitejs/plugin-react's babel pipeline (which silently no-ops
+          // in many real configs).
+          const transformLikelyMissing =
+            r._rawEventCount === 0 &&
+            (globalThis as { scryPluginApplied?: boolean })
+              .scryPluginApplied === true;
+          const transformHint = transformLikelyMissing
+            ? " ★ Most likely cause: your source files are NOT being transformed by the scry babel plugin (rawEvents=0 + pluginApplied=true). " +
+              "Switch your vite.config to use the dedicated Vite plugin: " +
+              "`import { scryVitePlugin } from \"@racgoo/scry/vite\"; export default { plugins: [scryVitePlugin(), react()] }`. " +
+              "It transforms .ts/.tsx/.js/.jsx directly and is independent of @vitejs/plugin-react's babel config."
+            : "";
           Output.printError(
             "Tracer.end(): no events were recorded for this bundle. " +
               "Common causes: (1) the traced function was not invoked between " +
@@ -142,6 +158,7 @@ class Tracer {
               "`rm -rf node_modules/.vite` and restart dev); " +
               "(5) emit & listener live on different `globalThis` objects " +
               "(try Vite `optimizeDeps.exclude: [\"@racgoo/scry\"]`)." +
+              transformHint +
               diag
           );
         }

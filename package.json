@@ -12,6 +12,10 @@
       "import": "./dist/esm/babel/index.js",
       "require": "./dist/cjs/babel/index.cjs"
     },
+    "./vite": {
+      "import": "./dist/esm/vite/index.js",
+      "require": "./dist/cjs/vite/index.cjs"
+    },
     "./zone": {
       "import": "./dist/esm/zone-init.js",
       "require": "./dist/cjs/zone-init.cjs"
@@ -95,5 +99,11 @@
     "flatted": "3.3.3",
     "js-base64": "^3.7.7",
     "zone.js": "^0.15.1"
+  },
+  "peerDependencies": {
+    "vite": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "vite": { "optional": true }
   }
 }
