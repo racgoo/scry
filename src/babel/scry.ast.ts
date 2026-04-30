@@ -699,12 +699,15 @@ class ScryAst {
     maxDepth: number,
     originalNode: babel.types.CallExpression | babel.types.NewExpression
   ) {
-    // Clone the original node so the max-depth early-return is not
-    // re-instrumented during the Babel re-traversal that follows
-    // path.replaceWith().  Without the TRACE_MARKER comment the cloned node
-    // would be treated as fresh user code and wrapped in yet another IIFE,
-    // leading to infinite recursion ("Maximum call stack size exceeded").
-    const safeReturn = this.t.cloneNode(originalNode, true);
+    // Use a SHALLOW clone (deep=false) so children are shared references,
+    // not recursively copied.  A deep clone causes exponential memory growth
+    // for long method chains: IIFE49 deep-clones IIFE48, whose safeReturn
+    // already deep-clones IIFE47, whose safeReturn clones IIFE46... leading
+    // to 2^N nodes and OOM ("JavaScript heap out of memory").
+    // The TRACE_MARKER on the outer shallow clone is enough to prevent
+    // re-instrumentation — the enter guard (CallExpression.enter path.skip())
+    // blocks traversal into any child IIFEs that appear as callee objects.
+    const safeReturn = this.t.cloneNode(originalNode, false);
     safeReturn.leadingComments = [
       { type: "CommentBlock", value: ` ${TRACE_MARKER} ` },
     ];
@@ -905,19 +908,55 @@ class ScryAst {
     chained: boolean
   ) {
     const newExpression = path.isNewExpression && path.isNewExpression();
+    const originalCallee = path.node.callee;
+
+    // For chained calls the callee's object is a previously-generated IIFE.
+    // Without hoisting, @babel/generator would print that IIFE inline at EVERY
+    // reference point (processedCall + maxDepthGuard fallback), causing each
+    // wrapper to double the previous wrapper's code: O(2^N) output size for
+    // N-level chains.  By storing the receiver in a local variable we ensure
+    // IIFE_prev is printed exactly once, giving O(N) output instead.
+    const isChainedMember =
+      chained && this.t.isMemberExpression(originalCallee);
+    const RECEIVER_VAR = "__scry_obj";
+    const effectiveCallee = isChainedMember
+      ? this.t.memberExpression(
+          this.t.identifier(RECEIVER_VAR),
+          (originalCallee as babel.types.MemberExpression).property,
+          (originalCallee as babel.types.MemberExpression).computed
+        )
+      : originalCallee;
+
     const processedCall = newExpression
-      ? this.t.newExpression(path.node.callee, [
+      ? this.t.newExpression(effectiveCallee, [
           this.t.spreadElement(
             this.t.identifier(ScryAstVariable.processedArgs)
           ),
         ])
-      : this.t.callExpression(path.node.callee, [
+      : this.t.callExpression(effectiveCallee, [
           this.t.spreadElement(
             this.t.identifier(ScryAstVariable.processedArgs)
           ),
         ]);
+    // Mark processedCall so isDuplicateFunction treats it as already-instrumented
+    // code, providing a belt-and-suspenders guard against re-wrapping.
+    processedCall.leadingComments = [
+      { type: "CommentBlock", value: ` ${TRACE_MARKER} ` },
+    ];
 
     const parameterNeedsSpread = path.node.arguments.length !== 0;
+
+    // Receiver hoisting declaration: const __scry_obj = IIFE_prev;
+    // Inserted as the first statement of TRACE_ZONE.run's callback body when
+    // the call is chained so that the receiver appears only once in the output.
+    const receiverHoistDecl = isChainedMember
+      ? this.t.variableDeclaration("const", [
+          this.t.variableDeclarator(
+            this.t.identifier(RECEIVER_VAR),
+            (originalCallee as babel.types.MemberExpression).object
+          ),
+        ])
+      : null;
 
     let resultAst: babel.types.ExpressionStatement = this.t.expressionStatement(
       this.t.nullLiteral()
@@ -937,7 +976,13 @@ class ScryAst {
               this.t.arrowFunctionExpression(
                 [],
 
-                this.t.blockStatement([
+                this.t.blockStatement(
+                  (
+                  [
+                  // Hoist receiver before processedArgs so both the args array
+                  // and the actual call can use the identifier instead of the
+                  // full IIFE expression.  null entries are filtered out below.
+                  receiverHoistDecl,
                   this.t.variableDeclaration("const", [
                     this.t.variableDeclarator(
                       this.t.identifier(ScryAstVariable.processedArgs),
@@ -1144,7 +1189,8 @@ class ScryAst {
                   this.t.returnStatement(
                     this.t.identifier(ScryAstVariable.originalCallReturnValue)
                   ),
-                ])
+                  ] as (babel.types.Statement | null)[]).filter(Boolean) as babel.types.Statement[]
+                ),
               ),
             ]
           )
