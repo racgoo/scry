@@ -29,6 +29,12 @@ function TraceItem({
   return (
     <li className="trace-item">
       <div className="trace-row">
+        {/* L-shaped connector that ties this row to the parent guide line.
+            Renders only when this <li> sits inside another .trace-list
+            (CSS handles visibility via :not(:first-child)/etc).  The
+            connector + the guide line on the parent <ul> form a clean
+            tree that doesn't break when items wrap. */}
+        <span className="tree-connector" aria-hidden="true" />
         <button
           type="button"
           className={`collapse-btn ${hasChildren ? "has-children" : "is-leaf"} ${

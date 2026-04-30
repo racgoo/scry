@@ -19,13 +19,34 @@ class WebUIStrategy implements ExporterStrategyInterface {
   }
 
   export(data: TraceNode[], meta: TraceReportMeta) {
-    // Inject both the trace tree and the report metadata as window globals.
-    // The React WebUI reads __INJECTION_DATA__ (serialized TraceNode[]) and
-    // __INJECTION_META__ (description / startTime / duration).
+    // The trace tree has cyclic refs (parent ↔ children) so it can't go
+    // through plain JSON.stringify.  We use the same flatted-based
+    // Transformer for the primary tree and for each bundle's tree, then
+    // pass the rest of `meta` (which is JSON-safe scalars/arrays) via
+    // a regular JSON encode.
+    const safeMeta = { ...meta } as TraceReportMeta;
+    const bundleData =
+      meta.bundles && meta.bundles.length > 0
+        ? meta.bundles.map((b) => ({
+            id: b.id,
+            description: b.description,
+            startTimeISO: b.startTimeISO,
+            durationMs: b.durationMs,
+            // Each bundle's nodes get their own flatted blob to dodge
+            // the circular-reference TypeError that bit us when bundles
+            // landed inside a JSON.stringify(meta).
+            nodesSerialized: Transformer.serialize(b.nodes),
+          }))
+        : undefined;
+    delete safeMeta.bundles;
+
     const injectionScript =
       `<script>` +
       `window.__INJECTION_DATA__ = "${Transformer.serialize(data)}";` +
-      `window.__INJECTION_META__ = ${JSON.stringify(meta)};` +
+      `window.__INJECTION_META__ = ${JSON.stringify(safeMeta)};` +
+      (bundleData
+        ? `window.__INJECTION_BUNDLES__ = ${JSON.stringify(bundleData)};`
+        : "") +
       `</script>`;
 
     let injectedHTML: string;

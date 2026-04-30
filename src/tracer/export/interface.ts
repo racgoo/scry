@@ -16,10 +16,18 @@ interface TraceReportMeta {
   droppedNullBundle?: number;
   listenerKind?: "process" | "globalThis" | "none";
   pluginApplied?: boolean;
-  // Counter incremented in every transformed module body — proves whether
-  // the babel plugin actually ran on user source files (vs. just the
-  // runtime being loaded).  0 = plugin never ran.
   transformedFiles?: number;
+  // Every bundle that ended within the export-debounce window.  When the
+  // user calls Tracer.start/end multiple times in quick succession we
+  // batch them into a single report (avoids popup-blocker on the second
+  // window.open) and let the UI flip between them.
+  bundles?: Array<{
+    id: number;
+    description: string;
+    startTimeISO: string;
+    durationMs: number;
+    nodes: TraceNode[];
+  }>;
 }
 
 interface ExporterStrategyInterface {

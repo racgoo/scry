@@ -1,44 +1,50 @@
 :root {
-  /* GitHub-Dark inspired palette, tuned for IDE-style code rendering */
-  --bg-0: #0b0d12;
-  --bg-1: #0f131a;
-  --bg-elevated: #161b24;
-  --bg-card: rgba(22, 27, 36, 0.78);
+  /* Refined palette — sit between GitHub Dark and Linear/Vercel.
+     Slightly more contrast than the previous pass so cards and code
+     blocks don't visually dissolve into the backdrop. */
+  --bg-0: #0a0c11;
+  --bg-1: #0f1218;
+  --bg-elevated: #161a23;
+  --bg-card: rgba(22, 26, 35, 0.82);
+  --bg-card-strong: rgba(28, 33, 44, 0.92);
   --bg-code: #0d1117;
-  --bg-hover: rgba(255, 255, 255, 0.025);
+  --bg-hover: rgba(255, 255, 255, 0.03);
 
   --border-subtle: rgba(148, 163, 184, 0.07);
-  --border: rgba(148, 163, 184, 0.14);
-  --border-strong: rgba(148, 163, 184, 0.26);
+  --border: rgba(148, 163, 184, 0.16);
+  --border-strong: rgba(148, 163, 184, 0.28);
 
   --text-primary: #e6edf3;
-  --text-secondary: #8b949e;
-  --text-tertiary: #6e7681;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
 
   --accent-rgb: 88, 166, 255;
   --accent: rgb(var(--accent-rgb));
   --accent-soft: rgba(var(--accent-rgb), 0.12);
-  --accent-soft-hover: rgba(var(--accent-rgb), 0.2);
+  --accent-soft-hover: rgba(var(--accent-rgb), 0.22);
 
-  --tree-line: rgba(148, 163, 184, 0.16);
+  --tree-line: rgba(148, 163, 184, 0.18);
   --tree-line-active: rgba(var(--accent-rgb), 0.55);
 
   --success: #3fb950;
-  --success-bg: rgba(63, 185, 80, 0.12);
+  --success-bg: rgba(63, 185, 80, 0.14);
   --error: #f85149;
-  --error-bg: rgba(248, 81, 73, 0.12);
+  --error-bg: rgba(248, 81, 73, 0.14);
   --warn: #d29922;
-  --warn-bg: rgba(210, 153, 34, 0.12);
+  --warn-bg: rgba(210, 153, 34, 0.14);
 
   --radius-sm: 6px;
   --radius: 10px;
   --radius-lg: 14px;
+  --radius-xl: 18px;
 
-  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 0 1px rgba(var(--accent-rgb), 0.15),
+    0 12px 40px rgba(var(--accent-rgb), 0.08);
 
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
-    Roboto, "Pretendard Variable", sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter",
+    "Segoe UI", Roboto, "Pretendard Variable", sans-serif;
   --font-mono: "SF Mono", ui-monospace, "JetBrains Mono", "Fira Code",
     SFMono-Regular, Menlo, Consolas, monospace;
 
@@ -58,38 +64,56 @@ html, body, #root {
   color: var(--text-primary);
 }
 
+/* Multi-layer ambient backdrop — soft accent at corners, less neon than
+   the previous pass.  Subtle noise via repeating gradient on top. */
 body::before {
   content: "";
   position: fixed; inset: 0;
   background:
-    radial-gradient(circle at 18% -8%, rgba(var(--accent-rgb), 0.16), transparent 55%),
-    radial-gradient(circle at 82% 110%, rgba(139, 92, 246, 0.10), transparent 55%);
+    radial-gradient(ellipse 60% 40% at 15% -5%, rgba(var(--accent-rgb), 0.18), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 85% 105%, rgba(139, 92, 246, 0.12), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(255, 255, 255, 0.015), transparent 70%);
   pointer-events: none;
   z-index: 0;
 }
 
-/* App now scales to viewport — no more cramped fixed-width content on big monitors. */
 .app {
   position: relative;
   z-index: 1;
   min-height: 100vh;
   padding: clamp(1rem, 2vw, 2rem) clamp(1rem, 4vw, 3rem) 4rem;
-  /* Use the viewport up to a comfortable reading width — IDE-style */
   max-width: min(1600px, 96vw);
   margin: 0 auto;
 }
 
 /* ── Header ───────────────────────────────────────────────────────────── */
 .header {
+  position: relative;
   background: var(--bg-card);
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: clamp(1.25rem, 2vw, 2rem) clamp(1.5rem, 2.5vw, 2.25rem);
+  border-radius: var(--radius-xl);
+  padding: clamp(1.5rem, 2.2vw, 2.25rem) clamp(1.75rem, 2.8vw, 2.5rem);
   margin-bottom: 1.25rem;
   box-shadow: var(--shadow);
+  overflow: hidden;
 }
-.header-inner { display: flex; flex-direction: column; gap: 0.5rem; }
+/* Top hairline accent — subtle Linear-style highlight */
+.header::before {
+  content: "";
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(var(--accent-rgb), 0.45) 20%,
+    rgba(var(--accent-rgb), 0.45) 80%,
+    transparent
+  );
+  opacity: 0.7;
+}
+.header-inner { display: flex; flex-direction: column; gap: 0.55rem; position: relative; }
 .title {
   display: flex; align-items: center; gap: 0.7rem;
   margin: 0;
@@ -124,11 +148,11 @@ body::before {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
-.time-item svg { opacity: 0.8; flex-shrink: 0; }
+.time-item svg { opacity: 0.7; flex-shrink: 0; }
 .header-links { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem; }
 .header-link {
   display: inline-flex; align-items: center; gap: 0.4rem;
-  padding: 0.4rem 0.85rem;
+  padding: 0.45rem 0.9rem;
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid var(--border);
@@ -137,21 +161,113 @@ body::before {
   font-weight: 500;
   text-decoration: none;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.18s ease;
 }
 .header-link:hover {
-  border-color: var(--accent);
+  border-color: rgba(var(--accent-rgb), 0.5);
   background: var(--accent-soft);
   color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+/* ── Bundle tabs ──────────────────────────────────────────────────────── */
+.bundle-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: var(--bg-card);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.55rem 0.85rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.bundle-tabs-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-tertiary);
+  font-weight: 700;
+  flex-shrink: 0;
+  padding: 0 0.25rem;
+}
+.bundle-tabs-scroll {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.bundle-tabs-scroll::-webkit-scrollbar { height: 6px; }
+.bundle-tabs-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+.bundle-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.bundle-tab:hover {
+  border-color: rgba(var(--accent-rgb), 0.5);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+.bundle-tab.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(var(--accent-rgb), 0.25);
+}
+.bundle-tab-index {
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  font-weight: 700;
+}
+.bundle-tab.is-active .bundle-tab-index { color: var(--accent); opacity: 0.8; }
+.bundle-tab-name {
+  font-weight: 500;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bundle-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 0.4rem;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.bundle-tab.is-active .bundle-tab-count {
+  background: rgba(var(--accent-rgb), 0.18);
+  color: var(--accent);
 }
 
 /* ── Main ─────────────────────────────────────────────────────────────── */
 .main {
   background: var(--bg-card);
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: clamp(1rem, 1.5vw, 1.75rem);
+  border-radius: var(--radius-xl);
+  padding: clamp(1rem, 1.5vw, 1.5rem);
   box-shadow: var(--shadow);
 }
 .empty {
@@ -170,54 +286,96 @@ body::before {
 }
 
 /* ── Trace tree ───────────────────────────────────────────────────────── */
-/* Layout: each row is [collapse-btn][name-button].
-   Children indent under the parent with a clean vertical guide line that
-   sits BEHIND the collapse buttons, so the chevrons are always crisp.   */
+/* Tree layout: each row is [connector][collapse-btn][name-button]
+   The connector is L-shaped — vertical guide on the parent <ul>
+   plus a horizontal stub on each child <li>. */
 .trace-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
+
+/* Indented (child) lists get a vertical guide line on the left edge */
 .trace-list .trace-list {
   position: relative;
-  /* Indent that aligns the inner collapse-btn under the outer chevron */
-  padding-left: 1.65rem;
+  padding-left: 1.85rem;
+  margin-left: 0;
 }
-/* Single thin guide line — replaces the previous "거지같은" dashed border */
+/* The vertical guide line itself.  Stops at the LAST child's row middle
+   so the line doesn't extend past the final L connector (this looks
+   noticeably cleaner — like VS Code's explorer). */
 .trace-list .trace-list::before {
   content: "";
   position: absolute;
   left: 0.55rem;
-  top: 0.2rem;
-  bottom: 0.2rem;
-  width: 1px;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
   background: var(--tree-line);
   pointer-events: none;
+  border-radius: 1px;
 }
-/* Highlight the guide line when hovering anywhere within that subtree */
+/* Cap the guide line at the last child's row middle: paint a
+   solid bg block from the last item's mid-point to the bottom. */
+.trace-list .trace-list > .trace-item:last-child::after {
+  content: "";
+  position: absolute;
+  left: -1.3rem;
+  top: 1.1rem;
+  bottom: 0;
+  width: 2px;
+  background: var(--bg-card);
+  pointer-events: none;
+}
 .trace-list .trace-list:hover::before { background: var(--tree-line-active); }
 
-.trace-item { padding: 0.05rem 0; }
+.trace-item {
+  position: relative;
+  padding: 0.05rem 0;
+}
 .trace-row {
   display: flex;
   align-items: center;
   gap: 0.15rem;
   position: relative;
+  border-radius: var(--radius-sm);
 }
 
-/* Collapse button — always visible, sized for click target. */
+/* L-shape connector stub — the horizontal bit that points from the
+   parent guide line into this row.  Hidden on root items (the outermost
+   .trace-list has no ::before guide line, so nothing to connect to). */
+.tree-connector {
+  display: none;
+}
+.trace-list .trace-list > .trace-item > .trace-row > .tree-connector {
+  display: block;
+  position: absolute;
+  left: -1.3rem;
+  top: 50%;
+  width: 1.05rem;
+  height: 1.5px;
+  background: var(--tree-line);
+  border-radius: 1px;
+  pointer-events: none;
+}
+.trace-list .trace-list:hover > .trace-item > .trace-row > .tree-connector {
+  background: var(--tree-line-active);
+}
+
+/* Collapse button — always visible filled chevron / dot */
 .collapse-btn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px;
   flex-shrink: 0;
   background: transparent;
   border: 0;
-  border-radius: 4px;
+  border-radius: 5px;
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: transform 0.18s ease, color 0.15s ease, background 0.15s ease;
+  transition: transform 0.2s cubic-bezier(0.32, 0.72, 0, 1),
+    color 0.15s ease, background 0.15s ease;
   position: relative;
-  z-index: 1; /* sits above the tree guide line */
+  z-index: 1;
 }
 .collapse-btn.has-children {
   color: var(--text-secondary);
@@ -230,7 +388,7 @@ body::before {
 .collapse-btn.is-collapsed { transform: rotate(-90deg); }
 .collapse-btn.is-leaf {
   color: var(--text-tertiary);
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: default;
 }
 
@@ -238,13 +396,13 @@ body::before {
   display: inline-flex; align-items: center; gap: 0.5rem;
   background: transparent; border: 0;
   color: var(--text-primary);
-  padding: 0.32rem 0.65rem;
+  padding: 0.34rem 0.7rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.92rem;
   text-align: left;
-  transition: background 0.12s ease;
-  flex: 1; /* fill the row so hover area matches the indent column */
+  transition: background 0.12s ease, color 0.12s ease;
+  flex: 1;
   min-width: 0;
 }
 .trace-name-btn:hover { background: var(--accent-soft); }
@@ -268,9 +426,9 @@ body::before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
+  min-width: 22px;
   height: 18px;
-  padding: 0 0.4rem;
+  padding: 0 0.45rem;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -290,6 +448,7 @@ body::before {
   border: 1px solid rgba(var(--accent-rgb), 0.25);
   font-weight: 500;
   letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 .chip.warn { background: var(--warn-bg); color: var(--warn); border-color: rgba(210, 153, 34, 0.3); }
 .chip.err { background: var(--error-bg); color: var(--error); border-color: rgba(248, 81, 73, 0.3); }
@@ -297,65 +456,95 @@ body::before {
 /* ── Modal ────────────────────────────────────────────────────────────── */
 .modal-backdrop {
   position: fixed; inset: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.7);
   display: flex; align-items: center; justify-content: center;
   padding: clamp(0.75rem, 2vw, 2rem);
   z-index: 1000;
-  backdrop-filter: blur(6px);
-  animation: backdrop-in 0.18s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: backdrop-in 0.2s ease;
 }
 @keyframes backdrop-in { from { opacity: 0; } }
+
 .modal-content {
   position: relative;
   background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: clamp(1.25rem, 2vw, 2rem);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
   max-width: min(1100px, 96vw);
   width: 100%;
   max-height: calc(100vh - 2rem);
   overflow-y: auto;
-  box-shadow: var(--shadow-lg);
-  animation: modal-in 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(var(--accent-rgb), 0.05);
+  animation: modal-in 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+  /* No padding — toolbar + sections handle their own.  Lets the toolbar
+     stick cleanly to the top edge. */
+  padding: 0;
 }
 @keyframes modal-in {
-  from { transform: translateY(8px) scale(0.985); opacity: 0; }
+  from { transform: translateY(12px) scale(0.985); opacity: 0; }
 }
 .modal-content::-webkit-scrollbar { width: 8px; }
 .modal-content::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
 
+/* Toolbar — sticky strip with the close button.  Sits ABOVE the
+   detail-header so the close button never overlaps badges. */
+.modal-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  padding: 0.65rem 0.85rem;
+  background: linear-gradient(
+    to bottom,
+    var(--bg-elevated) 0%,
+    var(--bg-elevated) 65%,
+    rgba(22, 26, 35, 0)
+  );
+  /* fade-out underneath so content scrolling under the toolbar
+     blends out gracefully (no harsh edge) */
+  pointer-events: none;
+}
+.modal-toolbar > * { pointer-events: auto; }
+.modal-toolbar-spacer { flex: 1; }
+
 .modal-close {
-  position: absolute; top: 0.85rem; right: 0.85rem;
+  display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   cursor: pointer;
-  font-size: 0.95rem;
-  display: inline-flex; align-items: center; justify-content: center;
   transition: all 0.15s ease;
 }
-.modal-close:hover { color: var(--text-primary); border-color: var(--border-strong); background: rgba(255, 255, 255, 0.04); }
+.modal-close:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.07);
+}
+.modal-close:active {
+  transform: scale(0.96);
+}
 
 .detail-header {
-  display: flex; flex-direction: column; gap: 0.7rem;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
+  display: flex; flex-direction: column; gap: 0.65rem;
+  /* Pulls the title flush with the modal padding, but starts BELOW the
+     sticky toolbar — no overlap with the close button. */
+  padding: 0 clamp(1.25rem, 2vw, 2rem) 1rem;
+  margin-bottom: 1rem;
   border-bottom: 1px solid var(--border-subtle);
 }
-.detail-title-row {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 1rem; flex-wrap: wrap;
-}
 .function-name {
-  display: inline-flex; align-items: center; gap: 0.6rem;
-  font-family: var(--font-mono);
-  font-size: clamp(1.15rem, 1.5vw, 1.4rem);
+  display: flex; align-items: center; gap: 0.6rem;
   margin: 0;
+  font-family: var(--font-mono);
+  font-size: clamp(1.2rem, 1.6vw, 1.5rem);
   color: var(--text-primary);
   font-weight: 600;
   letter-spacing: -0.01em;
+  /* Wrap long function names instead of stretching the row */
   word-break: break-all;
   min-width: 0;
 }
@@ -363,22 +552,37 @@ body::before {
   font-style: italic;
   font-weight: 700;
   color: var(--accent);
-  font-size: 1.1em;
+  font-size: 1.15em;
   font-family: "Times New Roman", serif;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2em;
+  height: 1.2em;
+  background: var(--accent-soft);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-radius: 6px;
+  padding: 0 0.25rem;
+  font-size: 0.85em;
 }
+.function-name-text { word-break: break-all; }
+
 .source-row {
   display: inline-flex; align-items: center; gap: 0.4rem;
   color: var(--text-tertiary);
   font-size: 0.78rem;
+  font-family: var(--font-mono);
 }
 .source-row svg { flex-shrink: 0; opacity: 0.7; }
-.source-row code { font-family: var(--font-mono); word-break: break-all; }
+.source-row code { word-break: break-all; }
 
-.meta-badges { display: flex; gap: 0.35rem; flex-wrap: wrap; flex-shrink: 0; }
+.meta-badges {
+  display: flex; gap: 0.35rem; flex-wrap: wrap;
+}
 .badge {
   display: inline-flex; align-items: center;
-  padding: 0.2rem 0.6rem;
+  padding: 0.22rem 0.62rem;
   border-radius: 999px;
   font-size: 0.7rem;
   font-weight: 600;
@@ -387,33 +591,50 @@ body::before {
   color: var(--text-secondary);
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 .badge.call-type { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.3); background: var(--accent-soft); }
 .badge.ok { color: var(--success); border-color: rgba(63, 185, 80, 0.35); background: var(--success-bg); }
 .badge.fail { color: var(--error); border-color: rgba(248, 81, 73, 0.35); background: var(--error-bg); }
 .badge.warn { color: var(--warn); border-color: rgba(210, 153, 34, 0.35); background: var(--warn-bg); }
 
-.section { margin-bottom: 1.1rem; }
+.section {
+  margin: 0 clamp(1.25rem, 2vw, 2rem) 1rem;
+}
+.section:last-of-type { margin-bottom: 1.25rem; }
 .section-title {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-tertiary);
-  margin: 0 0 0.45rem;
+  margin: 0 0 0.5rem;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.section-title::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 12px;
+  border-radius: 2px;
+  background: linear-gradient(to bottom, var(--accent), rgba(var(--accent-rgb), 0.3));
+  opacity: 0.8;
 }
 
 /* ── CodeBlock (IDE-style) ────────────────────────────────────────────── */
 .code-block {
   margin: 0;
   background: var(--bg-code);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: auto;
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.6;
   padding: 0.85rem 0;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
 }
 .code-block::-webkit-scrollbar { height: 8px; width: 8px; }
 .code-block::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
@@ -427,7 +648,7 @@ body::before {
   display: inline-block;
   flex-shrink: 0;
   color: var(--text-tertiary);
-  opacity: 0.6;
+  opacity: 0.55;
   text-align: right;
   user-select: none;
   width: 2.4em;

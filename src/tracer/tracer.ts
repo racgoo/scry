@@ -47,6 +47,21 @@ class Tracer {
     traceBundleId: 0,
   };
 
+  // Debounce export so back-to-back Tracer.start/end pairs land in ONE
+  // tab instead of triggering N separate window.open() calls.  Real-world
+  // report: code with two consecutive
+  //   Tracer.start("a"); ... Tracer.end(); Tracer.start("b"); ... Tracer.end();
+  // showed only the first trace because the browser popup blocker
+  // refused the second window.open (it lost user-gesture context inside
+  // an async .then callback).  We now collect every bundle that ends
+  // within the debounce window and surface them all in a single report.
+  private pendingExport: ReturnType<typeof setTimeout> | null = null;
+  private pendingBundleIds: number[] = [];
+  // 50ms is short enough that a single one-shot Tracer.end() still feels
+  // synchronous to users, but long enough to absorb a tight start/end
+  // /start/end pair.
+  private static EXPORT_DEBOUNCE_MS = 50;
+
   //Start tracing
   @checkPlugin //Decorator for method to check if plugin is applied
   public start(description?: string) {
@@ -176,35 +191,21 @@ class Tracer {
               diag
           );
         }
-        //Make trace tree(hierarchical tree structure by call)
-        const traceNodes: TraceNode[] =
-          this.nodeGenerator.generateNodesWithTraceDetails(currentBundleDetails);
-        //Update duration (ms)
+        //Update duration (ms) — tree generation deferred to flush
         this.recorder.getBundleMap().get(endBundleId)!.duration =
           Date.now() -
           this.recorder.getBundleMap().get(endBundleId)!.startTime;
 
-        // Render the trace via the React WebUI (single-file build embedded
-        // at package build time).  Pass both the tree and the report meta
-        // (description / startTime / duration) so the React UI can render
-        // the same header the legacy template used to.
-        const bundle = this.recorder.getBundleMap().get(endBundleId)!;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const r = this.recorder as any;
-        this.exporter.export(traceNodes, {
-          description: bundle.description,
-          startTimeISO: new Date(bundle.startTime).toISOString(),
-          durationMs: bundle.duration,
-          rawEventCount: r._rawEventCount,
-          droppedNullBundle: r._droppedNullBundle,
-          listenerKind: r._listenerKind,
-          pluginApplied:
-            (globalThis as { scryPluginApplied?: boolean })
-              .scryPluginApplied === true,
-          transformedFiles:
-            (globalThis as { __scryTransformedFileCount?: number })
-              .__scryTransformedFileCount ?? 0,
-        });
+        // Queue this bundle for export.  Debounce — if more start/end
+        // pairs fire within EXPORT_DEBOUNCE_MS, they all land in the
+        // same report tab instead of triggering separate window.open
+        // calls (the browser popup-blocks all but the first).
+        this.pendingBundleIds.push(endBundleId);
+        if (this.pendingExport !== null) clearTimeout(this.pendingExport);
+        this.pendingExport = setTimeout(() => {
+          this.pendingExport = null;
+          this.flushPendingExports();
+        }, Tracer.EXPORT_DEBOUNCE_MS);
       })
       .catch((error: unknown) => {
         // Surface the full error so users notice silent failures instead of
@@ -224,6 +225,55 @@ class Tracer {
       });
   }
 
+  // Drain queued bundles into a SINGLE export call.  We export the
+  // most-recent bundle as the primary view (its trace tree is what the
+  // WebUI renders by default) but stash every queued bundle's trees and
+  // metadata in the report meta so the UI can offer a bundle selector
+  // without us needing to open multiple browser tabs.
+  private flushPendingExports() {
+    const ids = this.pendingBundleIds.slice();
+    this.pendingBundleIds.length = 0;
+    if (ids.length === 0) return;
+
+    const bundles: TraceReportBundle[] = [];
+    for (const bundleId of ids) {
+      const bundle = this.recorder.getBundleMap().get(bundleId);
+      if (!bundle) continue;
+      const traceNodes: TraceNode[] =
+        this.nodeGenerator.generateNodesWithTraceDetails(bundle.details);
+      bundles.push({
+        id: bundleId,
+        description: bundle.description,
+        startTimeISO: new Date(bundle.startTime).toISOString(),
+        durationMs: bundle.duration,
+        nodes: traceNodes,
+      });
+    }
+    if (bundles.length === 0) return;
+
+    // Use the LAST bundle's data as the "primary" payload for back-compat
+    // with the existing exporter.export(data, meta) signature.  The other
+    // bundles ride along on `meta.bundles`.
+    const primary = bundles[bundles.length - 1];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = this.recorder as any;
+    this.exporter.export(primary.nodes, {
+      description: primary.description,
+      startTimeISO: primary.startTimeISO,
+      durationMs: primary.durationMs,
+      rawEventCount: r._rawEventCount,
+      droppedNullBundle: r._droppedNullBundle,
+      listenerKind: r._listenerKind,
+      pluginApplied:
+        (globalThis as { scryPluginApplied?: boolean }).scryPluginApplied ===
+        true,
+      transformedFiles:
+        (globalThis as { __scryTransformedFileCount?: number })
+          .__scryTransformedFileCount ?? 0,
+      bundles,
+    });
+  }
+
   private handleDuplicatedStart() {
     Output.printError(
       "Tracing is already started. Please call Tracer.end() first."
@@ -235,6 +285,14 @@ class Tracer {
       "Tracing is not started. Please call Tracer.start() first."
     );
   }
+}
+
+interface TraceReportBundle {
+  id: number;
+  description: string;
+  startTimeISO: string;
+  durationMs: number;
+  nodes: TraceNode[];
 }
 
 export default Tracer;

@@ -51,28 +51,35 @@ export function NodeDetailModal({ node, onClose }: Props) {
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          type="button"
-          className="modal-close"
-          onClick={onClose}
-          aria-label="close"
-        >
-          ✕
-        </button>
+        {/* Sticky toolbar — keeps the close button visible while the modal
+            scrolls and never overlaps the title row.  All meta moves
+            below it instead of fighting for the same corner. */}
+        <div className="modal-toolbar">
+          <div className="modal-toolbar-spacer" />
+          <button
+            type="button"
+            className="modal-close"
+            onClick={onClose}
+            aria-label="close"
+            title="Close (Esc)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+              <path d="M6 6l12 12M6 18L18 6" />
+            </svg>
+          </button>
+        </div>
         <header className="detail-header">
-          <div className="detail-title-row">
-            <h2 className="function-name">
-              <span className="function-name-icon">ƒ</span>
-              {node.name || "(anonymous)"}
-            </h2>
-            <div className="meta-badges">
-              <span className="badge call-type">{callType}</span>
-              <span className={`badge ${node.errored ? "fail" : "ok"}`}>
-                {node.errored ? "Failed" : "Success"}
-              </span>
-              {node.chained && <span className="badge">chained</span>}
-              {!node.completed && <span className="badge warn">pending</span>}
-            </div>
+          <h2 className="function-name">
+            <span className="function-name-icon" aria-hidden="true">ƒ</span>
+            <span className="function-name-text">{node.name || "(anonymous)"}</span>
+          </h2>
+          <div className="meta-badges">
+            <span className="badge call-type">{callType}</span>
+            <span className={`badge ${node.errored ? "fail" : "ok"}`}>
+              {node.errored ? "Failed" : "Success"}
+            </span>
+            {node.chained && <span className="badge">chained</span>}
+            {!node.completed && <span className="badge warn">pending</span>}
           </div>
           {node.source && (
             <div className="source-row">

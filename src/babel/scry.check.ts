@@ -193,6 +193,38 @@ class ScryChecker {
     );
   }
 
+  /**
+   * Skip React hook calls (`useState`, `useEffect`, `useUserInfoQuery`, …).
+   *
+   * Wrapping hook calls in our zone-forking IIFE is a footgun: hooks must
+   * be invoked in the same order on every render with the same identities,
+   * and any extra wrapping function we slip in changes Suspense / promise
+   * semantics that React + TanStack Query / TanStack Router rely on.
+   * Real-world impact: PermissionChecker → useUserInfoQuery → setState in
+   * <Transitioner> infinite-looped, even with all of zone.js's patches
+   * disabled, because the wrapped IIFE caused the suspense retry loop to
+   * see a fresh-looking promise on every cycle.
+   *
+   * The convention React enforces ("hook names start with `use` followed
+   * by a capital letter") gives us a precise, statically-checkable rule.
+   * Matches both bare `useFoo()` and `obj.useFoo()` shapes.
+   */
+  public isReactHookCall(
+    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
+  ): boolean {
+    const callee = path.node.callee;
+    if (this.t.isIdentifier(callee)) {
+      return /^use[A-Z]/.test(callee.name);
+    }
+    if (
+      this.t.isMemberExpression(callee) &&
+      this.t.isIdentifier(callee.property)
+    ) {
+      return /^use[A-Z]/.test(callee.property.name);
+    }
+    return false;
+  }
+
   //Check if the function is a Tracer method
   public isTracerMethod(
     path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
