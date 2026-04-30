@@ -66,6 +66,7 @@
   "license": "MIT",
   "devDependencies": {
     "@babel/core": "^7.27.4",
+    "esbuild": "^0.25.5",
     "@babel/preset-typescript": "^7.28.5",
     "@types/babel__core": "^7.20.5",
     "@types/jest": "^29.5.12",
