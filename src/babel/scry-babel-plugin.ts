@@ -211,6 +211,16 @@ function scryBabelPlugin(
       }
     },
     NewExpression: {
+      enter(path: babel.NodePath<babel.types.NewExpression>) {
+        // Skip the IIFE's body immediately in the enter phase so Babel never
+        // descends into its complex generated structure.  Without this guard,
+        // every ancestor traversal re-enters the IIFE and adds ~20+ call-stack
+        // frames per level, causing "Maximum call stack size exceeded" in files
+        // with many call expressions.
+        if (scryChecker.isGeneratedIIFE(path.node)) {
+          path.skip();
+        }
+      },
       exit(
         path: babel.NodePath<babel.types.NewExpression>,
         state: babel.PluginPass
@@ -218,10 +228,7 @@ function scryBabelPlugin(
         try {
           const filename = state.filename ?? "";
           if (!isFileIncluded(filename, options)) return;
-          // If this node is a plugin-generated IIFE, skip it immediately.
-          // This is a direct WeakSet lookup — the most reliable guard.
           if (scryChecker.isGeneratedIIFE(path.node)) {
-            path.skip();
             return;
           }
           transformCall(path, state, t, scryAst, scryChecker, maxDepth);
@@ -231,6 +238,13 @@ function scryBabelPlugin(
       },
     },
     CallExpression: {
+      enter(path: babel.NodePath<babel.types.CallExpression>) {
+        // Same guard as NewExpression.enter — prevent deep traversal into
+        // plugin-generated IIFE bodies.
+        if (scryChecker.isGeneratedIIFE(path.node)) {
+          path.skip();
+        }
+      },
       exit(
         path: babel.NodePath<babel.types.CallExpression>,
         state: babel.PluginPass
@@ -238,9 +252,7 @@ function scryBabelPlugin(
         try {
           const filename = state.filename ?? "";
           if (!isFileIncluded(filename, options)) return;
-          // If this node is a plugin-generated IIFE, skip it immediately.
           if (scryChecker.isGeneratedIIFE(path.node)) {
-            path.skip();
             return;
           }
           transformCall(path, state, t, scryAst, scryChecker, maxDepth);
@@ -368,10 +380,24 @@ function transformCall(
   const chained = scryChecker.isChainedFunction(path);
   const fnName = scryAst.getFunctionName(path);
 
+  // For chained calls (callee.object is itself a CallExpression, i.e., the
+  // receiver is a previously-generated IIFE) we must NOT emit a maxDepthGuard.
+  // The guard's fallback embeds the full callee chain, which is also referenced
+  // by processedCall inside TRACE_ZONE.run.  Having the same IIFE node appear
+  // at TWO places in the output causes @babel/generator to print it twice,
+  // and since each level doubles the previous level's code, the total output
+  // grows as O(2^N) for N chained calls — hitting Node's max string length.
+  // Chained calls are sequential (not recursive) so depth limiting is
+  // unnecessary for them anyway.
+  const maxDepthGuardNode = chained
+    ? null
+    : scryAst.createMaxDepthGuard(maxDepth, path.node);
+
   const newNode = t.callExpression(
     t.arrowFunctionExpression(
       [],
-      t.blockStatement([
+      t.blockStatement(
+        [
         scryAst.createMarkerVariable(),
         scryAst.createTraceId(),
         scryAst.createTraceContextOptionalUpdater(),
@@ -379,7 +405,8 @@ function transformCall(
         scryAst.createReturnValueDeclaration(),
         // Skip Zone instrumentation when nesting depth exceeds maxDepth.
         // The original call is still executed – only tracing overhead is bypassed.
-        scryAst.createMaxDepthGuard(maxDepth, path.node),
+        // null for chained calls (filtered below).
+        maxDepthGuardNode,
         scryAst.createNewZoneContextWithTraceId(),
         scryAst.createDeclareTraceZoneWithTraceId(),
         scryAst.craeteOriginCallExecutor(path, state, chained),
@@ -428,7 +455,8 @@ function transformCall(
           ])
         ),
         t.returnStatement(t.identifier(ScryAstVariable.returnValue)),
-      ]),
+        ].filter(Boolean) as babel.types.Statement[]
+      ),
       awaitExpression
     ),
     []
