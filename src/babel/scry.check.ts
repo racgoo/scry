@@ -374,8 +374,8 @@ class ScryChecker {
   public isInsideGeneratedIIFE(
     path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
   ): boolean {
-    let current = path.parentPath;
-    while (current) {
+    let current: babel.NodePath | null = path.parentPath;
+    while (current !== null) {
       if (
         (current.isCallExpression() || current.isNewExpression()) &&
         (
