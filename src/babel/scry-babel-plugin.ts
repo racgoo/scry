@@ -406,6 +406,18 @@ function transformCall(
         scryAst.createTraceContextOptionalUpdater(),
         scryAst.createCodeExtractor(path, chained),
         scryAst.createReturnValueDeclaration(),
+        // Define the per-call-site emit helper at the top of the IIFE so it is
+        // visible from every emit site: the TRACE_ZONE.run callback (enter,
+        // promise-settle exit/done, sync done), the catch clause (exit, done),
+        // and the post-run sync exit branch below.  Hoisting the giant detail
+        // object literal here (instead of inlining it 4–8× per traced call)
+        // is the dominant size win — typical files shrink ~5×.
+        scryAst.createEmitHelperDecl(
+          path,
+          state,
+          fnName,
+          chained
+        ),
         // Skip Zone instrumentation when nesting depth exceeds maxDepth.
         // The original call is still executed – only tracing overhead is bypassed.
         // null for chained calls (filtered below).
@@ -447,12 +459,10 @@ function transformCall(
           ),
           t.blockStatement([
             t.expressionStatement(
-              scryAst.emitTraceEvent(
-                scryAst.getEventDetail(path, state, {
-                  type: "exit",
-                  fnName,
-                  chained,
-                })
+              scryAst.callEmitHelper(
+                "exit",
+                t.identifier(ScryAstVariable.returnValue),
+                t.arrayExpression([])
               )
             ),
           ])

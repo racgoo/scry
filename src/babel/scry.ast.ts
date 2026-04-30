@@ -1000,12 +1000,10 @@ class ScryAst {
                   ]),
                   //Generate 'enter' event
                   this.t.expressionStatement(
-                    this.emitTraceEvent(
-                      this.getEventDetail(path, state, {
-                        type: "enter",
-                        fnName: this.getFunctionName(path),
-                        chained,
-                      })
+                    this.callEmitHelper(
+                      "enter",
+                      this.t.nullLiteral(),
+                      this.t.identifier(ScryAstVariable.processedArgs)
                     )
                   ),
                   this.t.variableDeclaration("const", [
@@ -1080,21 +1078,17 @@ class ScryAst {
                                 ),
                               ]),
                               this.t.expressionStatement(
-                                this.emitTraceEvent(
-                                  this.getEventDetail(path, state, {
-                                    type: "exit",
-                                    fnName: this.getFunctionName(path),
-                                    chained: false,
-                                  })
+                                this.callEmitHelper(
+                                  "exit",
+                                  this.t.identifier(ScryAstVariable.returnValue),
+                                  this.t.arrayExpression([])
                                 )
                               ),
                               this.t.expressionStatement(
-                                this.emitTraceEvent(
-                                  this.getEventDetail(path, state, {
-                                    type: "done",
-                                    fnName: this.getFunctionName(path),
-                                    chained: false,
-                                  })
+                                this.callEmitHelper(
+                                  "done",
+                                  this.t.nullLiteral(),
+                                  this.t.arrayExpression([])
                                 )
                               ),
                             ])
@@ -1137,12 +1131,10 @@ class ScryAst {
                         ),
                       ]),
                       this.t.expressionStatement(
-                        this.emitTraceEvent(
-                          this.getEventDetail(path, state, {
-                            type: "done",
-                            fnName: this.getFunctionName(path),
-                            chained: false,
-                          })
+                        this.callEmitHelper(
+                          "done",
+                          this.t.nullLiteral(),
+                          this.t.arrayExpression([])
                         )
                       ),
                     ])
@@ -1198,22 +1190,18 @@ class ScryAst {
         ]),
         // emit exit so the trace node records the error as its returnValue
         this.t.expressionStatement(
-          this.emitTraceEvent(
-            this.getEventDetail(path, state, {
-              type: "exit",
-              fnName,
-              chained: false,
-            })
+          this.callEmitHelper(
+            "exit",
+            this.t.identifier(ScryAstVariable.returnValue),
+            this.t.arrayExpression([])
           )
         ),
         // emit done so activeTraceIdSet is cleaned up without waiting for timeout
         this.t.expressionStatement(
-          this.emitTraceEvent(
-            this.getEventDetail(path, state, {
-              type: "done",
-              fnName,
-              chained: false,
-            })
+          this.callEmitHelper(
+            "done",
+            this.t.nullLiteral(),
+            this.t.arrayExpression([])
           )
         ),
         // Clean up Zone entry on error path to prevent memory leak
@@ -1301,6 +1289,155 @@ class ScryAst {
       this.t.arrowFunctionExpression([this.t.identifier("d")], branch),
       [detail]
     );
+  }
+
+  /**
+   * Build a per-call-site emit helper arrow that captures all the static
+   * context (fnName, source, chained) and emits a fully-formed detail object
+   * at runtime.  Hoisting this helper into the IIFE means the giant detail
+   * object literal appears EXACTLY ONCE per traced call instead of once per
+   * emit (enter + exit + done = 3×, async cases used to be even more).
+   *
+   * Generated form:
+   *   const __scry_emit = (type, returnValue, args) => {
+   *     const isDone = type === "done";
+   *     return ((d) => typeof window === "undefined"
+   *       ? process.emit(NAME, { detail: d })
+   *       : globalThis.dispatchEvent(new CustomEvent(NAME, { detail: d })))({
+   *         traceBundleId: traceContext.traceBundleId,
+   *         type, name: <fnName>,
+   *         classCode:    isDone ? "" : code.classCode,
+   *         methodCode:   isDone ? "" : code.methodCode,
+   *         functionCode: isDone ? "" : code.functionCode,
+   *         traceId,
+   *         source:        isDone ? "" : <source>,
+   *         returnValue,
+   *         chained: <chained>,
+   *         parentTraceId: isDone ? "" : traceContext.parentTraceId,
+   *         args,
+   *       });
+   *   };
+   *
+   * Callers replace
+   *   emitTraceEvent(getEventDetail({type:"enter",...}))
+   * with
+   *   __scry_emit("enter", null, processedArgs)
+   * which is a single expression statement.
+   */
+  public createEmitHelperDecl(
+    path: babel.NodePath<
+      babel.types.CallExpression | babel.types.NewExpression
+    >,
+    state: babel.PluginPass,
+    fnName: string,
+    chained: boolean
+  ) {
+    const t = this.t;
+    const TYPE = t.identifier("type");
+    const RETURN_VALUE = t.identifier("returnValue");
+    const ARGS = t.identifier("args");
+    const IS_DONE = t.identifier("isDone");
+    const isDoneCheck = t.binaryExpression(
+      "===",
+      TYPE,
+      t.stringLiteral("done")
+    );
+    const codeOrEmpty = (key: string) =>
+      t.conditionalExpression(
+        IS_DONE,
+        t.stringLiteral(""),
+        t.memberExpression(
+          t.identifier(ScryAstVariable.code),
+          t.identifier(key)
+        )
+      );
+    const detail = t.objectExpression([
+      t.objectProperty(
+        t.identifier(ScryAstVariable.traceBundleId),
+        t.memberExpression(
+          t.identifier(ScryAstVariable.traceContext),
+          t.identifier(ScryAstVariable.traceBundleId)
+        )
+      ),
+      t.objectProperty(t.identifier(ScryAstVariable.type), TYPE, false, true),
+      t.objectProperty(
+        t.identifier(ScryAstVariable.name),
+        t.stringLiteral(fnName)
+      ),
+      t.objectProperty(
+        t.identifier(ScryAstVariable.classCode),
+        codeOrEmpty(ScryAstVariable.classCode)
+      ),
+      t.objectProperty(
+        t.identifier(ScryAstVariable.methodCode),
+        codeOrEmpty(ScryAstVariable.methodCode)
+      ),
+      t.objectProperty(
+        t.identifier(ScryAstVariable.functionCode),
+        codeOrEmpty(ScryAstVariable.functionCode)
+      ),
+      t.objectProperty(
+        t.identifier(ScryAstVariable.traceId),
+        t.identifier(ScryAstVariable.traceId),
+        false,
+        true
+      ),
+      t.objectProperty(
+        t.identifier(ScryAstVariable.source),
+        t.conditionalExpression(
+          IS_DONE,
+          t.stringLiteral(""),
+          this.getSource(path, state)
+        )
+      ),
+      t.objectProperty(
+        t.identifier(ScryAstVariable.returnValue),
+        RETURN_VALUE,
+        false,
+        true
+      ),
+      t.objectProperty(
+        t.identifier(ScryAstVariable.chained),
+        t.booleanLiteral(chained)
+      ),
+      t.objectProperty(
+        t.identifier(ScryAstVariable.parentTraceId),
+        t.conditionalExpression(
+          IS_DONE,
+          t.stringLiteral(""),
+          t.memberExpression(
+            t.identifier(ScryAstVariable.traceContext),
+            t.identifier(ScryAstVariable.parentTraceId)
+          )
+        )
+      ),
+      t.objectProperty(t.identifier(ScryAstVariable.args), ARGS, false, true),
+    ]);
+    const body = t.blockStatement([
+      t.variableDeclaration("const", [
+        t.variableDeclarator(IS_DONE, isDoneCheck),
+      ]),
+      t.returnStatement(this.emitTraceEvent(detail)),
+    ]);
+    return t.variableDeclaration("const", [
+      t.variableDeclarator(
+        t.identifier("__scry_emit"),
+        t.arrowFunctionExpression([TYPE, RETURN_VALUE, ARGS], body)
+      ),
+    ]);
+  }
+
+  /** Build a `__scry_emit(type, returnValue, args)` call expression. */
+  public callEmitHelper(
+    type: TraceEventType,
+    returnValue: babel.types.Expression,
+    args: babel.types.Expression
+  ) {
+    return this.t.callExpression(this.t.identifier("__scry_emit"), [
+      this.t.stringLiteral(type),
+      returnValue,
+      args,
+    ]);
   }
 
   //Create event detail ast object
