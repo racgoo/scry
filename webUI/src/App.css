@@ -1,14 +1,15 @@
 :root {
-  /* Refined palette — softer, less saturated, IDE-friendly (GitHub Dark) */
+  /* GitHub-Dark inspired palette, tuned for IDE-style code rendering */
   --bg-0: #0b0d12;
   --bg-1: #0f131a;
   --bg-elevated: #161b24;
-  --bg-card: rgba(22, 27, 36, 0.72);
+  --bg-card: rgba(22, 27, 36, 0.78);
   --bg-code: #0d1117;
+  --bg-hover: rgba(255, 255, 255, 0.025);
 
-  --border-subtle: rgba(148, 163, 184, 0.08);
-  --border: rgba(148, 163, 184, 0.16);
-  --border-strong: rgba(148, 163, 184, 0.28);
+  --border-subtle: rgba(148, 163, 184, 0.07);
+  --border: rgba(148, 163, 184, 0.14);
+  --border-strong: rgba(148, 163, 184, 0.26);
 
   --text-primary: #e6edf3;
   --text-secondary: #8b949e;
@@ -17,6 +18,10 @@
   --accent-rgb: 88, 166, 255;
   --accent: rgb(var(--accent-rgb));
   --accent-soft: rgba(var(--accent-rgb), 0.12);
+  --accent-soft-hover: rgba(var(--accent-rgb), 0.2);
+
+  --tree-line: rgba(148, 163, 184, 0.16);
+  --tree-line-active: rgba(var(--accent-rgb), 0.55);
 
   --success: #3fb950;
   --success-bg: rgba(63, 185, 80, 0.12);
@@ -29,7 +34,6 @@
   --radius: 10px;
   --radius-lg: 14px;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55);
 
@@ -56,48 +60,50 @@ html, body, #root {
 
 body::before {
   content: "";
-  position: fixed;
-  inset: 0;
-  background: radial-gradient(circle at 20% -10%, rgba(var(--accent-rgb), 0.15), transparent 50%),
-    radial-gradient(circle at 80% 110%, rgba(139, 92, 246, 0.1), transparent 50%);
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(circle at 18% -8%, rgba(var(--accent-rgb), 0.16), transparent 55%),
+    radial-gradient(circle at 82% 110%, rgba(139, 92, 246, 0.10), transparent 55%);
   pointer-events: none;
   z-index: 0;
 }
 
+/* App now scales to viewport — no more cramped fixed-width content on big monitors. */
 .app {
   position: relative;
   z-index: 1;
   min-height: 100vh;
-  padding: 2rem 1.5rem 4rem;
-  max-width: 1180px;
+  padding: clamp(1rem, 2vw, 2rem) clamp(1rem, 4vw, 3rem) 4rem;
+  /* Use the viewport up to a comfortable reading width — IDE-style */
+  max-width: min(1600px, 96vw);
   margin: 0 auto;
 }
 
 /* ── Header ───────────────────────────────────────────────────────────── */
 .header {
   background: var(--bg-card);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 1.75rem 2rem;
-  margin-bottom: 1.5rem;
+  padding: clamp(1.25rem, 2vw, 2rem) clamp(1.5rem, 2.5vw, 2.25rem);
+  margin-bottom: 1.25rem;
   box-shadow: var(--shadow);
 }
-.header-inner { display: flex; flex-direction: column; gap: 0.6rem; }
+.header-inner { display: flex; flex-direction: column; gap: 0.5rem; }
 .title {
   display: flex; align-items: center; gap: 0.7rem;
   margin: 0;
-  font-size: 1.65rem;
+  font-size: clamp(1.4rem, 2vw, 1.85rem);
   font-weight: 700;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
 }
-.title svg { color: var(--accent); }
+.title svg { color: var(--accent); flex-shrink: 0; }
 .subtitle {
   margin: 0;
   color: var(--text-secondary);
   font-size: 0.9rem;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .description {
   margin: 0.25rem 0 0;
@@ -108,7 +114,7 @@ body::before {
 .description span { font-weight: 500; color: var(--text-primary); }
 .time-info {
   display: flex; gap: 1.25rem; flex-wrap: wrap;
-  margin-top: 0.6rem; padding-top: 0.85rem;
+  margin-top: 0.7rem; padding-top: 0.85rem;
   border-top: 1px solid var(--border-subtle);
 }
 .time-item {
@@ -118,7 +124,7 @@ body::before {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
-.time-item svg { opacity: 0.8; }
+.time-item svg { opacity: 0.8; flex-shrink: 0; }
 .header-links { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.5rem; }
 .header-link {
   display: inline-flex; align-items: center; gap: 0.4rem;
@@ -139,13 +145,13 @@ body::before {
   color: var(--text-primary);
 }
 
-/* ── Main + empty state ───────────────────────────────────────────────── */
+/* ── Main ─────────────────────────────────────────────────────────────── */
 .main {
   background: var(--bg-card);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 1.5rem 1.25rem;
+  padding: clamp(1rem, 1.5vw, 1.75rem);
   box-shadow: var(--shadow);
 }
 .empty {
@@ -164,29 +170,72 @@ body::before {
 }
 
 /* ── Trace tree ───────────────────────────────────────────────────────── */
-.trace-list { list-style: none; margin: 0; padding: 0 0 0 0.25rem; }
-.trace-list .trace-list {
-  padding-left: 1.4rem;
-  border-left: 1px dashed var(--border-strong);
-  margin-left: 0.65rem;
+/* Layout: each row is [collapse-btn][name-button].
+   Children indent under the parent with a clean vertical guide line that
+   sits BEHIND the collapse buttons, so the chevrons are always crisp.   */
+.trace-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
+.trace-list .trace-list {
+  position: relative;
+  /* Indent that aligns the inner collapse-btn under the outer chevron */
+  padding-left: 1.65rem;
+}
+/* Single thin guide line — replaces the previous "거지같은" dashed border */
+.trace-list .trace-list::before {
+  content: "";
+  position: absolute;
+  left: 0.55rem;
+  top: 0.2rem;
+  bottom: 0.2rem;
+  width: 1px;
+  background: var(--tree-line);
+  pointer-events: none;
+}
+/* Highlight the guide line when hovering anywhere within that subtree */
+.trace-list .trace-list:hover::before { background: var(--tree-line-active); }
+
 .trace-item { padding: 0.05rem 0; }
-.trace-row { display: flex; align-items: center; gap: 0.2rem; }
+.trace-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  position: relative;
+}
+
+/* Collapse button — always visible, sized for click target. */
 .collapse-btn {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px;
-  background: transparent; border: 0;
+  flex-shrink: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 4px;
-  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition: transform 0.18s ease, color 0.15s ease, background 0.15s ease;
+  position: relative;
+  z-index: 1; /* sits above the tree guide line */
 }
-.collapse-btn:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.04); }
-.collapse-btn.invisible { visibility: hidden; cursor: default; }
-.collapse-btn.collapsed { transform: rotate(-90deg); }
+.collapse-btn.has-children {
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.collapse-btn.has-children:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.collapse-btn.is-collapsed { transform: rotate(-90deg); }
+.collapse-btn.is-leaf {
+  color: var(--text-tertiary);
+  opacity: 0.5;
+  cursor: default;
+}
 
 .trace-name-btn {
-  display: inline-flex; align-items: center; gap: 0.55rem;
+  display: inline-flex; align-items: center; gap: 0.5rem;
   background: transparent; border: 0;
   color: var(--text-primary);
   padding: 0.32rem 0.65rem;
@@ -195,6 +244,8 @@ body::before {
   font-size: 0.92rem;
   text-align: left;
   transition: background 0.12s ease;
+  flex: 1; /* fill the row so hover area matches the indent column */
+  min-width: 0;
 }
 .trace-name-btn:hover { background: var(--accent-soft); }
 .trace-name-btn.errored { color: var(--error); }
@@ -205,11 +256,34 @@ body::before {
   color: var(--accent);
   opacity: 0.85;
 }
-.trace-name { font-weight: 500; font-family: var(--font-mono); font-size: 0.9rem; }
+.trace-name {
+  font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trace-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 0.4rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+  margin-left: 0.15rem;
+}
 
 .chip {
   font-size: 0.68rem;
-  padding: 0.08rem 0.45rem;
+  padding: 0.1rem 0.5rem;
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent);
@@ -225,7 +299,7 @@ body::before {
   position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.65);
   display: flex; align-items: center; justify-content: center;
-  padding: 1.5rem;
+  padding: clamp(0.75rem, 2vw, 2rem);
   z-index: 1000;
   backdrop-filter: blur(6px);
   animation: backdrop-in 0.18s ease;
@@ -236,28 +310,29 @@ body::before {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 1.75rem 1.75rem 1.25rem;
-  max-width: 980px; width: 100%;
-  max-height: calc(100vh - 3rem);
+  padding: clamp(1.25rem, 2vw, 2rem);
+  max-width: min(1100px, 96vw);
+  width: 100%;
+  max-height: calc(100vh - 2rem);
   overflow-y: auto;
   box-shadow: var(--shadow-lg);
   animation: modal-in 0.22s cubic-bezier(0.32, 0.72, 0, 1);
 }
 @keyframes modal-in {
-  from { transform: translateY(8px) scale(0.98); opacity: 0; }
+  from { transform: translateY(8px) scale(0.985); opacity: 0; }
 }
 .modal-content::-webkit-scrollbar { width: 8px; }
 .modal-content::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
 
 .modal-close {
-  position: absolute; top: 1rem; right: 1rem;
-  width: 30px; height: 30px;
+  position: absolute; top: 0.85rem; right: 0.85rem;
+  width: 32px; height: 32px;
   background: transparent;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-tertiary);
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   display: inline-flex; align-items: center; justify-content: center;
   transition: all 0.15s ease;
 }
@@ -276,11 +351,13 @@ body::before {
 .function-name {
   display: inline-flex; align-items: center; gap: 0.6rem;
   font-family: var(--font-mono);
-  font-size: 1.3rem; margin: 0;
+  font-size: clamp(1.15rem, 1.5vw, 1.4rem);
+  margin: 0;
   color: var(--text-primary);
   font-weight: 600;
   letter-spacing: -0.01em;
   word-break: break-all;
+  min-width: 0;
 }
 .function-name-icon {
   font-style: italic;
@@ -288,6 +365,7 @@ body::before {
   color: var(--accent);
   font-size: 1.1em;
   font-family: "Times New Roman", serif;
+  flex-shrink: 0;
 }
 .source-row {
   display: inline-flex; align-items: center; gap: 0.4rem;
@@ -300,14 +378,14 @@ body::before {
 .meta-badges { display: flex; gap: 0.35rem; flex-wrap: wrap; flex-shrink: 0; }
 .badge {
   display: inline-flex; align-items: center;
-  padding: 0.18rem 0.55rem;
+  padding: 0.2rem 0.6rem;
   border-radius: 999px;
   font-size: 0.7rem;
   font-weight: 600;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 .badge.call-type { color: var(--accent); border-color: rgba(var(--accent-rgb), 0.3); background: var(--accent-soft); }
@@ -315,11 +393,11 @@ body::before {
 .badge.fail { color: var(--error); border-color: rgba(248, 81, 73, 0.35); background: var(--error-bg); }
 .badge.warn { color: var(--warn); border-color: rgba(210, 153, 34, 0.35); background: var(--warn-bg); }
 
-.section { margin-bottom: 1rem; }
+.section { margin-bottom: 1.1rem; }
 .section-title {
   font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--text-tertiary);
   margin: 0 0 0.45rem;
   font-weight: 700;
@@ -334,8 +412,8 @@ body::before {
   overflow: auto;
   font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 1.55;
-  padding: 0.8rem 0;
+  line-height: 1.6;
+  padding: 0.85rem 0;
 }
 .code-block::-webkit-scrollbar { height: 8px; width: 8px; }
 .code-block::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
@@ -344,12 +422,12 @@ body::before {
   padding: 0 1rem;
   white-space: pre;
 }
-.code-line:hover { background: rgba(255, 255, 255, 0.02); }
+.code-line:hover { background: rgba(255, 255, 255, 0.025); }
 .code-gutter {
   display: inline-block;
   flex-shrink: 0;
   color: var(--text-tertiary);
-  opacity: 0.55;
+  opacity: 0.6;
   text-align: right;
   user-select: none;
   width: 2.4em;

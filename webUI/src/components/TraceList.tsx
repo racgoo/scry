@@ -31,26 +31,62 @@ function TraceItem({
       <div className="trace-row">
         <button
           type="button"
-          className={`collapse-btn ${hasChildren ? "" : "invisible"} ${open ? "" : "collapsed"}`}
+          className={`collapse-btn ${hasChildren ? "has-children" : "is-leaf"} ${
+            open ? "is-open" : "is-collapsed"
+          }`}
           onClick={() => hasChildren && setOpen((v) => !v)}
-          aria-label={hasChildren ? (open ? "collapse" : "expand") : ""}
+          aria-label={hasChildren ? (open ? "collapse" : "expand") : "leaf"}
+          aria-expanded={hasChildren ? open : undefined}
           tabIndex={hasChildren ? 0 : -1}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M19 9l-7 7-7-7" />
-          </svg>
+          {hasChildren ? (
+            // Filled chevron — clearly visible, rotates when collapsed.
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M7 10l5 5 5-5z" />
+            </svg>
+          ) : (
+            // Subtle dot for leaves — keeps the gutter aligned without
+            // an empty-feeling slot.
+            <svg
+              width="6"
+              height="6"
+              viewBox="0 0 6 6"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <circle cx="3" cy="3" r="2" />
+            </svg>
+          )}
         </button>
         <button
           type="button"
           className={`trace-name-btn ${node.errored ? "errored" : ""}`}
           onClick={() => onSelect(node)}
         >
-          <span className="trace-icon">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <span className="trace-icon" aria-hidden="true">
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </span>
           <span className="trace-name">{node.name || "(anonymous)"}</span>
+          {hasChildren && (
+            <span className="trace-count" title={`${node.children.length} child calls`}>
+              {node.children.length}
+            </span>
+          )}
           {node.chained && <span className="chip">chained</span>}
           {!node.completed && <span className="chip warn">pending</span>}
           {node.errored && <span className="chip err">error</span>}

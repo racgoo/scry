@@ -20,32 +20,41 @@
 //
 // We disable just enough of zone's reactive plumbing to coexist with
 // modern React without losing the per-call trace propagation we depend on.
+//
+// IMPORTANT: zone.js's disable flags use the EXACT __load_patch name as the
+// suffix.  An earlier attempt at this fix used invented names like
+// `__Zone_disable_unhandledPromiseRejections` / `__Zone_disable_fetch` /
+// `__Zone_disable_ResizeObserver`, which zone.js silently ignores.  The
+// real patch names (from grepping zone.js's source) are:
+//   ZoneAwarePromise   — the Promise wrapper itself
+//   PromiseRejectionEvent — the unhandled-rejection re-throw plumbing
+//   on_property / XHR / MutationObserver / IntersectionObserver / FileReader
+//   queueMicrotask / customElements / EventTarget / timers / blocking ...
 const Z = globalThis as Record<string, unknown>;
-// Don't surface rejections through globalCallback — let React's
-// ErrorBoundary handle them as designed.  This is the single most
-// important flag for React 18+ + Suspense compatibility.
-if (Z.__Zone_disable_unhandledPromiseRejections === undefined) {
-  Z.__Zone_disable_unhandledPromiseRejections = true;
+
+// CRITICAL for React 18+ Suspense + TanStack Query.  Without this,
+// zone.js's PromiseRejectionEvent patch routes UNHANDLED rejections
+// through its own `handleError → globalCallback` re-throw path, which
+// short-circuits React's <ErrorBoundary> and traps Suspense retry loops
+// into "Maximum update depth exceeded" forever.
+if (Z.__Zone_disable_PromiseRejectionEvent === undefined) {
+  Z.__Zone_disable_PromiseRejectionEvent = true;
 }
-// Don't patch the EventTarget queue micro-task system (replicates above
-// pattern at the DOM-event level — same React-loop hazard).
+// Don't patch on-* DOM property handlers (onload / onerror / etc) — modern
+// React owns these and patching them causes spurious re-entrancy.
 if (Z.__Zone_disable_on_property === undefined) {
   Z.__Zone_disable_on_property = true;
 }
-// Skip XHR / fetch patches — we don't need them for tracing user code,
-// they only add latency and break libraries that use AbortController
-// in idiomatic ways.
+// Don't patch XHR — we don't need it for tracing user code, it just adds
+// latency and surprises libraries that use AbortController.
 if (Z.__Zone_disable_XHR === undefined) Z.__Zone_disable_XHR = true;
-if (Z.__Zone_disable_fetch === undefined) Z.__Zone_disable_fetch = true;
-// MutationObserver / IntersectionObserver / ResizeObserver patches —
-// modern React uses these heavily; not patching them avoids surprise
-// reentrancy.
-if (Z.__Zone_disable_MutationObserver === undefined)
-  Z.__Zone_disable_MutationObserver = true;
+// Don't patch IntersectionObserver / MutationObserver — modern React /
+// router / lazy-image libs hammer these, and patching them adds zone
+// overhead with no tracing benefit for our use case.
 if (Z.__Zone_disable_IntersectionObserver === undefined)
   Z.__Zone_disable_IntersectionObserver = true;
-if (Z.__Zone_disable_ResizeObserver === undefined)
-  Z.__Zone_disable_ResizeObserver = true;
+if (Z.__Zone_disable_MutationObserver === undefined)
+  Z.__Zone_disable_MutationObserver = true;
 
 import "zone.js";
 import { ScryAstVariable } from "./babel/scry.constant.js";
