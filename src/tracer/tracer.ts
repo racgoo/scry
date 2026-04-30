@@ -1,4 +1,10 @@
-import "zone.js";
+// Import the side-effect-only init module (NOT raw zone.js) so simply
+// importing Tracer is enough to set globalThis.scryPluginApplied.  This
+// closes the ordering hole where a user module calls Tracer.start() at
+// top level before any other transformed file has run its own flag-set
+// statement.  zone-init.ts itself imports "zone.js", so Zone is still
+// initialized.
+import "../zone-init.js";
 import dayjs from "dayjs";
 // import Format from "./format.js";
 import { Output } from "../utils/output.js";
