@@ -144,6 +144,13 @@ function scryBabelPlugin(
               ? ScryChecker.isESM(state)
               : moduleType === "esm";
 
+          // Add the flag first (as the initial unshift); subsequent unshifts
+          // will push the plugin imports in front of it, so the flag naturally
+          // lands AFTER all plugin-added imports and BEFORE the original body.
+          path.node.body.unshift(
+            t.expressionStatement(scryAst.createPluginAppliedVariable())
+          );
+
           scryAst.createZoneRootInitialization(path);
           scryAst.createTraceConextDeclare(path);
           scryAst.createExtractorDeclaration(path, esm);
@@ -246,8 +253,47 @@ function scryBabelPlugin(
 
   const post = function (this: babel.PluginPass) {
     try {
-      if (this.file && this.file.path) {
-        this.file.path.node.body.unshift(
+      const body = this.file?.path?.node?.body;
+      if (!body) return;
+
+      // Program.enter already injected the flag for included files.
+      // Only add it here for excluded files (e.g. node_modules that Babel still
+      // processes) so that at least one module marks the plugin as applied.
+      const alreadySet = body.some(
+        (node) =>
+          t.isExpressionStatement(node) &&
+          t.isAssignmentExpression(
+            (node as babel.types.ExpressionStatement).expression
+          ) &&
+          t.isMemberExpression(
+            (
+              (node as babel.types.ExpressionStatement)
+                .expression as babel.types.AssignmentExpression
+            ).left
+          ) &&
+          t.isIdentifier(
+            (
+              (
+                (node as babel.types.ExpressionStatement)
+                  .expression as babel.types.AssignmentExpression
+              ).left as babel.types.MemberExpression
+            ).property,
+            { name: ScryAstVariable.pluginApplied }
+          )
+      );
+
+      if (!alreadySet) {
+        // Insert AFTER the last import declaration so the generated code is
+        // valid ESM (some bundlers reject regular statements before imports).
+        let insertIdx = 0;
+        for (let i = 0; i < body.length; i++) {
+          if (t.isImportDeclaration(body[i])) {
+            insertIdx = i + 1;
+          }
+        }
+        body.splice(
+          insertIdx,
+          0,
           t.expressionStatement(scryAst.createPluginAppliedVariable())
         );
       }
