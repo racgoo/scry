@@ -164,11 +164,18 @@ class ScryAst {
     // scope. This can happen when Babel re-traverses the plugin-generated IIFE
     // after path.replaceWith() — the ArrowFunctionExpression visitor fires for
     // the new IIFE's arrow and would otherwise produce a duplicate declaration.
+    // Use isBlockStatement check to safely extract the body array; concise
+    // arrow functions (body is an Expression, not BlockStatement) return null
+    // so the `.some()` call is safely skipped via optional chaining.
+    const nodeBody = path.isProgram() ? undefined : path.node.body;
     const existingBody = path.isProgram()
       ? (path.node.body as babel.types.Statement[])
-      : (path.node.body as babel.types.BlockStatement)?.body;
+      : this.t.isBlockStatement(nodeBody as babel.types.Node)
+        ? (nodeBody as babel.types.BlockStatement).body
+        : null;
     if (
-      existingBody?.some(
+      Array.isArray(existingBody) &&
+      existingBody.some(
         (n) =>
           this.t.isVariableDeclaration(n) &&
           n.declarations.some(
