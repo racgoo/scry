@@ -22,32 +22,54 @@ const root = path.resolve(__dirname, "..");
 //
 // Patch names verified against zone.js's own `Zone.__load_patch(...)` calls
 // — invented names are silently ignored.
+// We only need the Zone API itself (Zone.current.fork({...}).run(cb)) for
+// trace-context propagation through plugin-emitted IIFEs.  We do NOT need
+// any of zone.js's automatic browser-API patches — the babel plugin
+// handles trace context manually at every call site.  Every patch we
+// leave on is just blast radius for React/lib compatibility bugs.
+//
+// Disabling each one individually (zone.js has no global "patch nothing"
+// flag).  Names verified against `Zone.__load_patch(...)` calls in
+// zone.js's source.
+// Each flag is written as a literal `__Zone_disable_<name>` string so it's
+// trivially greppable from the bundled output (regression test gates on
+// these literals).  Every entry uses `=== undefined` so a downstream
+// consumer can opt back into a specific patch by setting the flag false
+// BEFORE importing scry.
 const ZONE_DISABLE_BANNER = `
 ;(function(){
   if (typeof globalThis === "undefined") return;
   var Z = globalThis;
-  // Disable Promise wrapping — the actual cause of React 18 + Suspense +
-  // TanStack Query infinite loops ("Maximum update depth exceeded" inside
-  // <Transitioner>).  Native Promise lets React's error boundary and
-  // Suspense retry behave normally.
-  if (Z.__Zone_disable_ZoneAwarePromise === undefined)
-    Z.__Zone_disable_ZoneAwarePromise = true;
-  // Defence in depth: even if some lib re-enables ZoneAwarePromise, don't
-  // re-throw rejections through zone's globalCallback path.
-  if (Z.__Zone_disable_PromiseRejectionEvent === undefined)
-    Z.__Zone_disable_PromiseRejectionEvent = true;
-  // on_property: don't patch onload / onerror / etc — modern React owns
-  // those handlers and patching causes spurious re-entrancy.
-  if (Z.__Zone_disable_on_property === undefined)
-    Z.__Zone_disable_on_property = true;
-  // XHR / observers: not needed for trace-context propagation, only adds
-  // overhead and surprises libraries that use AbortController / observers
-  // in idiomatic ways.
+  // Promise: wrapping causes React 18 + Suspense + TanStack Query
+  // infinite loops ("Maximum update depth exceeded" in <Transitioner>).
+  if (Z.__Zone_disable_ZoneAwarePromise === undefined) Z.__Zone_disable_ZoneAwarePromise = true;
+  // PromiseRejectionEvent: rejection re-throws via globalCallback,
+  // React's <ErrorBoundary> can't intercept.
+  if (Z.__Zone_disable_PromiseRejectionEvent === undefined) Z.__Zone_disable_PromiseRejectionEvent = true;
+  // EventTarget: wraps every addEventListener handler.  When a user
+  // fetch error bubbles into a click/submit handler, zone re-throws
+  // it via globalCallback before React's invokeGuardedCallback can
+  // mark it caught — surfaces as Uncaught fetch errors.
+  if (Z.__Zone_disable_EventTarget === undefined) Z.__Zone_disable_EventTarget = true;
+  // on_property: onload / onerror / etc.  Modern React owns these.
+  if (Z.__Zone_disable_on_property === undefined) Z.__Zone_disable_on_property = true;
+  // Timers / microtasks / animation — wrap user callbacks; not needed
+  // for our trace context (plugin fork()s a zone at each call site).
+  if (Z.__Zone_disable_timers === undefined) Z.__Zone_disable_timers = true;
+  if (Z.__Zone_disable_blocking === undefined) Z.__Zone_disable_blocking = true;
+  if (Z.__Zone_disable_requestAnimationFrame === undefined) Z.__Zone_disable_requestAnimationFrame = true;
+  if (Z.__Zone_disable_queueMicrotask === undefined) Z.__Zone_disable_queueMicrotask = true;
+  // Network / DOM observer patches — not needed for trace propagation,
+  // surprisingly invasive in modern apps.
   if (Z.__Zone_disable_XHR === undefined) Z.__Zone_disable_XHR = true;
-  if (Z.__Zone_disable_IntersectionObserver === undefined)
-    Z.__Zone_disable_IntersectionObserver = true;
-  if (Z.__Zone_disable_MutationObserver === undefined)
-    Z.__Zone_disable_MutationObserver = true;
+  if (Z.__Zone_disable_FileReader === undefined) Z.__Zone_disable_FileReader = true;
+  if (Z.__Zone_disable_MutationObserver === undefined) Z.__Zone_disable_MutationObserver = true;
+  if (Z.__Zone_disable_IntersectionObserver === undefined) Z.__Zone_disable_IntersectionObserver = true;
+  if (Z.__Zone_disable_customElements === undefined) Z.__Zone_disable_customElements = true;
+  if (Z.__Zone_disable_geolocation === undefined) Z.__Zone_disable_geolocation = true;
+  // Legacy IE / pre-Promise polyfill plumbing.
+  if (Z.__Zone_disable_legacy === undefined) Z.__Zone_disable_legacy = true;
+  if (Z.__Zone_disable_toString === undefined) Z.__Zone_disable_toString = true;
 })();
 `;
 

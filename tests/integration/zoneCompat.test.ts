@@ -37,19 +37,34 @@ const CJS_BUNDLE = path.join(ROOT, "dist/cjs/zone-init.cjs");
 // strings zone.js's `Zone.__load_patch(...)` calls register, which is
 // the part that actually matters at runtime.
 const REQUIRED_DISABLE_FLAGS = [
-  // The big one — without this, every user Promise becomes a
-  // ZoneAwarePromise and React Suspense retries infinite-loop.
+  // The big two — Promise wrapping causes React 18 + Suspense retry
+  // loops; PromiseRejectionEvent re-throws unhandled rejections in a
+  // way React's <ErrorBoundary> can't intercept.
   "__Zone_disable_ZoneAwarePromise",
-  // Don't re-throw rejections through zone's globalCallback —
-  // React's <ErrorBoundary> handles them as designed.
   "__Zone_disable_PromiseRejectionEvent",
-  // Don't patch onload / onerror / etc.
+  // EventTarget — wraps addEventListener so user click/submit handlers
+  // run inside a zone task.  Throws bubble through zone's
+  // globalCallback before React's invokeGuardedCallback can catch
+  // them; surfaces as Uncaught fetch errors.
+  "__Zone_disable_EventTarget",
+  // on_property: onload / onerror / etc. handlers.
   "__Zone_disable_on_property",
-  // Not needed for trace propagation; only adds latency.
+  // Timers / microtasks / animation — not needed for trace propagation.
+  "__Zone_disable_timers",
+  "__Zone_disable_blocking",
+  "__Zone_disable_requestAnimationFrame",
+  "__Zone_disable_queueMicrotask",
+  // Network + DOM observers — not needed for trace propagation,
+  // surprisingly invasive in modern apps.
   "__Zone_disable_XHR",
-  // Modern React / lazy-image libs hammer these.
-  "__Zone_disable_IntersectionObserver",
+  "__Zone_disable_FileReader",
   "__Zone_disable_MutationObserver",
+  "__Zone_disable_IntersectionObserver",
+  "__Zone_disable_customElements",
+  "__Zone_disable_geolocation",
+  // Legacy plumbing.
+  "__Zone_disable_legacy",
+  "__Zone_disable_toString",
 ];
 
 describe("zone.js compatibility — bundle banner", () => {
