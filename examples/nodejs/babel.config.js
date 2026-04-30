@@ -1,13 +1,13 @@
-// ESM
-import { scryBabelPluginForESM } from "@racgoo/scry/babel";
+// ESM (package.json "type": "module")
+import { scryBabelPlugin } from "@racgoo/scry/babel";
 export default {
   presets: [],
-  plugins: [scryBabelPluginForESM],
+  plugins: [scryBabelPlugin],
 };
 
-// CJS;
-// const { scryBabelPluginForCJS } = require("@racgoo/scry/babel");
+// CJS (package.json "type": "commonjs") — uncomment and replace the above
+// const { scryBabelPlugin } = require("@racgoo/scry/babel");
 // module.exports = {
 //   presets: [],
-//   plugins: [scryBabelPluginForCJS],
+//   plugins: [scryBabelPlugin],
 // };
