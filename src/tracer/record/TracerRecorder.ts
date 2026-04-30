@@ -14,6 +14,13 @@ import { TraceRecorderInterface } from "./interface.js";
 class TraceRecorder implements TraceRecorderInterface {
   private bundleMap: Map<number, TraceBundle> = new Map();
   private boundOnTrace = this.onTrace.bind(this) as EventListener;
+  // Diagnostic counters — visible to Tracer.end()'s empty-bundle warning so
+  // users can tell apart "events arrived but were rejected" from "events
+  // never arrived at all" (the common Vite prebundle / globalThis-mismatch
+  // cause).
+  public _rawEventCount = 0;
+  public _droppedNullBundle = 0;
+  public _listenerKind: "process" | "globalThis" | "none" = "none";
   constructor() {
     this.initEventListener();
   }
@@ -23,11 +30,13 @@ class TraceRecorder implements TraceRecorderInterface {
    * Get detail from event and handle the trace event according to the type.
    */
   private onTrace(event: unknown) {
+    this._rawEventCount++;
     //Get trace detail from event
     const detail: TraceDetail | null = this.getTraceDetail(event);
     //Check if the detail is valid
     const detailValidation = this.isValidDetail(detail);
     if (!detailValidation) {
+      this._droppedNullBundle++;
       return;
     }
     //Check if the return value is error(origin error, not trace error)
@@ -149,8 +158,10 @@ class TraceRecorder implements TraceRecorderInterface {
   private initEventListener() {
     if (Environment.isNodeJS()) {
       process.on(TRACE_EVENT_NAME, this.boundOnTrace);
+      this._listenerKind = "process";
     } else {
       globalThis.addEventListener(TRACE_EVENT_NAME, this.boundOnTrace);
+      this._listenerKind = "globalThis";
     }
   }
 

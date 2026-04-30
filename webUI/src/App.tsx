@@ -31,7 +31,7 @@ function App() {
       />
       <main className="main">
         {roots.length === 0 ? (
-          <EmptyDiagnostic data={data} />
+          <EmptyDiagnostic data={data} meta={meta} />
         ) : (
           <TraceList nodes={roots} onSelect={setSelected} />
         )}

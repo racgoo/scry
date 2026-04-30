@@ -112,13 +112,37 @@ class Tracer {
         // .vite/deps prebundle, plugin not in vite babel.plugins, etc.) are
         // also worth flagging here.
         if (currentBundleDetails.length === 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const r = this.recorder as any;
+          const diag =
+            ` [diagnostics: rawEvents=${r._rawEventCount ?? "?"} ` +
+            `droppedNullBundle=${r._droppedNullBundle ?? "?"} ` +
+            `listener=${r._listenerKind ?? "?"} ` +
+            `pluginApplied=${
+              (globalThis as { scryPluginApplied?: boolean })
+                .scryPluginApplied === true
+            }]`;
+          // rawEvents > 0 && droppedNullBundle === rawEvents:
+          //   listener heard them but they had traceBundleId=null
+          //   → Tracer.start was not called or the IIFE's traceContext
+          //     never sync'd from Zone.current — likely a transform issue.
+          // rawEvents === 0:
+          //   no listener received anything.  Either nothing emitted
+          //   (transform skipped entirely → check NODE_ENV / plugin
+          //   wiring / stale .vite/deps) or emit & listener live on
+          //   different globalThis objects (rare; usually a Vite
+          //   `optimizeDeps` quirk — try `optimizeDeps.exclude:
+          //   ["@racgoo/scry"]`).
           Output.printError(
             "Tracer.end(): no events were recorded for this bundle. " +
               "Common causes: (1) the traced function was not invoked between " +
-              "Tracer.start() and Tracer.end(); (2) NODE_ENV !== 'development' " +
+              "Tracer.start() and Tracer.end(); (2) NODE_ENV === 'production' " +
               "at transform time; (3) the babel plugin is not active for this " +
               "file; (4) Vite served a stale .vite/deps prebundle (try " +
-              "`rm -rf node_modules/.vite`)."
+              "`rm -rf node_modules/.vite` and restart dev); " +
+              "(5) emit & listener live on different `globalThis` objects " +
+              "(try Vite `optimizeDeps.exclude: [\"@racgoo/scry\"]`)." +
+              diag
           );
         }
         //Make trace tree(hierarchical tree structure by call)
@@ -135,10 +159,18 @@ class Tracer {
         // (description / startTime / duration) so the React UI can render
         // the same header the legacy template used to.
         const bundle = this.recorder.getBundleMap().get(endBundleId)!;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const r = this.recorder as any;
         this.exporter.export(traceNodes, {
           description: bundle.description,
           startTimeISO: bundle.startTime.toISOString(),
           durationMs: bundle.duration,
+          rawEventCount: r._rawEventCount,
+          droppedNullBundle: r._droppedNullBundle,
+          listenerKind: r._listenerKind,
+          pluginApplied:
+            (globalThis as { scryPluginApplied?: boolean })
+              .scryPluginApplied === true,
         });
       })
       .catch((error: unknown) => {

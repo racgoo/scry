@@ -9,6 +9,13 @@ interface TraceReportMeta {
   description: string;
   startTimeISO: string;
   durationMs: number;
+  // Diagnostics — surfaced in the WebUI's empty-tree panel so users can
+  // distinguish "emit never reached the listener" from "listener got events
+  // but rejected them" without console-diving.
+  rawEventCount?: number;
+  droppedNullBundle?: number;
+  listenerKind?: "process" | "globalThis" | "none";
+  pluginApplied?: boolean;
 }
 
 interface ExporterStrategyInterface {

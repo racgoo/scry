@@ -4,6 +4,10 @@ export interface TraceMeta {
   description: string;
   startTimeISO: string;
   durationMs: number;
+  rawEventCount?: number;
+  droppedNullBundle?: number;
+  listenerKind?: "process" | "globalThis" | "none";
+  pluginApplied?: boolean;
 }
 
 const FALLBACK: TraceMeta = {
