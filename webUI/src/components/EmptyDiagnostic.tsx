@@ -28,10 +28,8 @@ export function EmptyDiagnostic({ data, meta }: Props) {
 
   // Lead with the runtime diagnostic counters — they pinpoint the failure
   // mode immediately:
-  //   rawEventCount === 0 + listener=globalThis → emit & listener live on
-  //     different globalThis objects (Vite prebundle quirk, fix:
-  //     `optimizeDeps.exclude: ["@racgoo/scry"]`) OR no IIFE was generated
-  //     at transform time (NODE_ENV=production / plugin not active).
+  //   transformedFiles === 0 → babel plugin never ran on user code
+  //     (vite.config wiring); we render a one-line fix.
   //   rawEventCount > 0 + droppedNullBundle === rawEventCount → IIFE ran
   //     but traceContext.traceBundleId stayed null (Tracer.start wasn't
   //     called inside the function or zone propagation broke).
