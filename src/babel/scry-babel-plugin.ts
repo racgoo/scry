@@ -380,16 +380,19 @@ function transformCall(
   const chained = scryChecker.isChainedFunction(path);
   const fnName = scryAst.getFunctionName(path);
 
-  // For chained calls (callee.object is itself a CallExpression, i.e., the
-  // receiver is a previously-generated IIFE) we must NOT emit a maxDepthGuard.
-  // The guard's fallback embeds the full callee chain, which is also referenced
-  // by processedCall inside TRACE_ZONE.run.  Having the same IIFE node appear
-  // at TWO places in the output causes @babel/generator to print it twice,
-  // and since each level doubles the previous level's code, the total output
-  // grows as O(2^N) for N chained calls — hitting Node's max string length.
-  // Chained calls are sequential (not recursive) so depth limiting is
-  // unnecessary for them anyway.
-  const maxDepthGuardNode = chained
+  // Skip maxDepthGuard whenever the call already contains a previously-
+  // generated IIFE in its callee or arguments.  The guard's `return originalNode`
+  // fallback embeds the full callee + args, and processedCall references the
+  // same nodes again inside TRACE_ZONE.run.  When those nodes are large IIFEs
+  // (chained calls, or any nested call like `f(g(h()))`), printing them twice
+  // doubles the output per nesting level — O(2^N) growth that explodes file
+  // size and overflows the stack downstream (vite/esbuild post-processing).
+  // chained() is the narrow `a().b()` case; hasGeneratedIIFEDescendant() also
+  // catches `f(a())`, `f(g(), h())`, etc.  These calls run sequentially, so
+  // depth limiting is unnecessary for them anyway.
+  const containsGeneratedIIFE =
+    chained || scryChecker.hasGeneratedIIFEDescendant(path.node);
+  const maxDepthGuardNode = containsGeneratedIIFE
     ? null
     : scryAst.createMaxDepthGuard(maxDepth, path.node);
 

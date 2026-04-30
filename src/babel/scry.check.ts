@@ -317,6 +317,56 @@ class ScryChecker {
     );
   }
 
+  /**
+   * Returns true when this call has a previously-generated IIFE somewhere in
+   * its callee chain or argument list.  Such calls must NOT receive a
+   * createMaxDepthGuard fallback because the guard's `return originalNode`
+   * embeds the entire (already-wrapped) callee/args, causing the same large
+   * IIFE node to be printed twice — once in the guard, once in processedCall.
+   * For deeply-nested or chained code this doubles output per level (O(2^N)).
+   *
+   * isChainedFunction only catches `a().b()` (callee.object is a Call); this
+   * helper additionally catches `f(a())` and `f(g(h()))` where the wrapped
+   * IIFE lives inside arguments.
+   */
+  public hasGeneratedIIFEDescendant(
+    node: babel.types.CallExpression | babel.types.NewExpression
+  ): boolean {
+    const visit = (n: babel.types.Node | null | undefined): boolean => {
+      if (!n) return false;
+      if (
+        (this.t.isCallExpression(n) || this.t.isNewExpression(n)) &&
+        this._generatedIIFENodes.has(n)
+      ) {
+        return true;
+      }
+      // Only descend through expression-bearing children we care about.
+      if (this.t.isMemberExpression(n)) {
+        return visit(n.object) || (n.computed && visit(n.property));
+      }
+      if (this.t.isCallExpression(n) || this.t.isNewExpression(n)) {
+        if (visit(n.callee)) return true;
+        for (const a of n.arguments) {
+          if (this.t.isSpreadElement(a)) {
+            if (visit(a.argument)) return true;
+          } else if (visit(a as babel.types.Node)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    if (visit(node.callee)) return true;
+    for (const a of node.arguments) {
+      if (this.t.isSpreadElement(a)) {
+        if (visit(a.argument)) return true;
+      } else if (visit(a as babel.types.Node)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   //Check if the function is a pre-processed function
   public isDuplicateFunction(
     path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>

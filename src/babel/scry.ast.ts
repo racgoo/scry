@@ -1286,8 +1286,22 @@ class ScryAst {
   }
 
   //Create emit trace event ast object
+  //
+  // Wraps the detail object in a one-shot IIFE so the (potentially huge) detail
+  // expression is emitted exactly ONCE per trace event instead of being printed
+  // verbatim in both the Node.js and Browser branches.  Before this change, every
+  // CallExpression that scry instrumented produced 4–8 copies of the detail
+  // object (sync enter/exit + async then/catch enter/exit, each duplicated for
+  // Node and Browser), causing 100×+ output bloat for ordinary files and
+  // overflowing the call stack in vite/esbuild downstream processing.
+  //
+  // Generated form:
+  //   ((d) => typeof window === "undefined"
+  //     ? process.emit(NAME, { detail: d })
+  //     : globalThis.dispatchEvent(new CustomEvent(NAME, { detail: d })))(<detail>)
   public emitTraceEvent(detail: babel.types.ObjectExpression) {
-    return this.t.conditionalExpression(
+    const D = this.t.identifier("d");
+    const branch = this.t.conditionalExpression(
       this.t.binaryExpression(
         "===",
         this.t.unaryExpression("typeof", this.t.identifier("window")),
@@ -1302,7 +1316,7 @@ class ScryAst {
         [
           this.t.stringLiteral(TRACE_EVENT_NAME),
           this.t.objectExpression([
-            this.t.objectProperty(this.t.identifier("detail"), detail),
+            this.t.objectProperty(this.t.identifier("detail"), D),
           ]),
         ]
       ),
@@ -1316,11 +1330,15 @@ class ScryAst {
           this.t.newExpression(this.t.identifier("CustomEvent"), [
             this.t.stringLiteral(TRACE_EVENT_NAME),
             this.t.objectExpression([
-              this.t.objectProperty(this.t.identifier("detail"), detail),
+              this.t.objectProperty(this.t.identifier("detail"), D),
             ]),
           ]),
         ]
       )
+    );
+    return this.t.callExpression(
+      this.t.arrowFunctionExpression([this.t.identifier("d")], branch),
+      [detail]
     );
   }
 
