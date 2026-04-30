@@ -371,9 +371,7 @@ class ScryChecker {
    *  - globalThis.dispatchEvent() / window.dispatchEvent() in error paths
    *  - any other generated CallExpression outside the TRACE_ZONE.run() block
    */
-  public isInsideGeneratedIIFE(
-    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
-  ): boolean {
+  public isInsideGeneratedIIFE(path: babel.NodePath): boolean {
     let current: babel.NodePath | null = path.parentPath;
     while (current !== null) {
       if (
