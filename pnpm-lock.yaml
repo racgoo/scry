@@ -27,6 +27,9 @@ importers:
       '@babel/preset-typescript':
         specifier: ^7.28.5
         version: 7.28.5(@babel/core@7.29.0)
+      '@types/babel__core':
+        specifier: ^7.20.5
+        version: 7.20.5
       '@types/jest':
         specifier: ^29.5.12
         version: 29.5.14
