@@ -1,6 +1,6 @@
 import * as babel from "@babel/core";
 import Extractor from "../utils/extractor.js";
-import { ACTIVE_TRACE_ID_SET, DEVELOPMENT_MODE, TRACE_MARKER, TRACE_ZONE } from "./scry.constant.js";
+import { ACTIVE_TRACE_ID_SET, TRACE_MARKER, TRACE_ZONE } from "./scry.constant.js";
 
 //Checkers for scry babel plugin
 class ScryChecker {
@@ -298,11 +298,24 @@ class ScryChecker {
   //Check if the environment is development. Called at Babel transform time (always Node.js context).
   //The isNodeJS() guard was removed because bundlers like Vite can expose a window object in their
   //build context, causing the check to incorrectly return false for browser-targeted builds.
+  //
+  // Important: Vite's dev server does NOT always set process.env.NODE_ENV at
+  // the time our plugin's transform hook runs (it's set late, in some entry
+  // paths it's `undefined`).  Anything that isn't *explicitly* "production"
+  // is treated as development — that's the only case we want to skip.
+  // Real-world impact of the strict check: instrumentation silently no-op'd
+  // in user Vite projects, producing an empty trace report
+  // ("__INJECTION_DATA__" = "[[]]" / `data.length === 0`).
   static isDevelopmentMode() {
     if (typeof process !== "undefined" && process.env) {
-      return process.env.NODE_ENV === DEVELOPMENT_MODE;
+      const v = process.env.NODE_ENV;
+      // Treat anything other than the explicit "production" string as dev.
+      // This covers undefined, "" , "development", "dev", "test", etc.
+      return v !== "production";
     }
-    return false;
+    // No `process` (very unusual at babel transform time): assume dev so the
+    // user gets traces rather than a confusing empty report.
+    return true;
   }
 
   //Check if the function is a chained function
