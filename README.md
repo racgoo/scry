@@ -1,220 +1,262 @@
-# 🔍 Scry(ver. Beta)
+# 🔍 Scry (Beta)
 
-# **JavaScript/TypeScript execution flow tracker**
+**JavaScript/TypeScript execution flow tracker**
 
 <div align="center">
-  <img src="https://img.shields.io/badge/version-0.0.45-blue.svg" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-0.0.44-blue.svg" alt="Version"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/>
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"/>
+  <img src="https://img.shields.io/badge/CI-passing-brightgreen.svg" alt="CI"/>
 </div>
 
 <div align="center">
   <img width="320" alt="Scry" src="https://github.com/user-attachments/assets/d6ca7480-658b-484a-8a51-00edbcb082c7" />
 </div>
 
-Github: [https://github.com/racgoo/scry](https://github.com/racgoo/scry)
-
+GitHub: [https://github.com/racgoo/scry](https://github.com/racgoo/scry)  
 NPM: [https://www.npmjs.com/package/@racgoo/scry](https://www.npmjs.com/package/@racgoo/scry)
 
 ---
 
 ## Introduction
 
-Scry is a JavaScript and TypeScript function execution context tracing library
-that records every function and method call—along with its name, input, and output.
+Scry is a JavaScript/TypeScript function execution context tracing library that **automatically records every function and method call** — along with its name, arguments, and return value — using a Babel plugin for compile-time AST instrumentation.
 
-It was created to ease the pain of debugging unexpected runtime errors and unhelpful error messages.
-Scry helps you clearly understand complex code flow and analyze relationships between function calls with precision.
+It was created to ease the pain of debugging unexpected runtime errors.  
+Scry lets you clearly understand complex call flows and relationships between function calls.
 
----
-
-## Supports
-
-#### Runtime Environments
-- Node.js - Server-side JavaScript runtime
-- Browser - Modern web browsers with ES2018+ support
-
-#### Module Systems
-- CommonJS (CJS) - Traditional Node.js module system using require() and module.exports
-- ES Modules (ESM) - Modern JavaScript module system using import and export
-
-#### Dual Package Support
-- This library provides dual package distribution with automatic module resolution:
+> ⚠️ **Development only** — the Babel plugin instruments code only when `NODE_ENV=development`. There is zero overhead in production builds.
 
 ---
 
-## Features
+## How it works
 
-- Full recording of function and method calls, including input and output values
-
-- Automatically tracks function names and call stacks, grouping them by execution context.
-Even in chained calls like test().test(), each call is recognized and grouped together, preserving the chaining structure.
-It also fully supports asynchronous contexts, allowing seamless tracking across async/await, .then(), and callbacks.
-
-- Compatible with both Node.js and browser environments.
-In the browser, trace results are displayed directly in the console with a clickable link that opens the visual report in a new tab.
-In Node.js, trace results are saved as `HTML` files under the scry/report folder at the project root. The report is `automatically opened` in a new browser tab upon execution, providing immediate visual feedback.
+1. The **Babel plugin** (`@racgoo/scry/babel`) rewrites every call expression at compile time, wrapping it in a lightweight IIFE that emits enter/exit events.
+2. The **Zone.js** context (bundled inside `@racgoo/scry`) tracks async call graphs automatically.
+3. `Tracer.start()` / `Tracer.end()` capture all instrumented calls in the recorded window and export a visual HTML report.
 
 ---
 
-## Trace Output & Report View
-- #### Browser  
-  Automatically opens the trace result page in a **new browser tab** when tracing is complete.
+## Supported environments
 
-- #### Node.js  
-  Saves the trace result as an HTML file under the scry/report folder at the project root. The report opens automatically in a `new browser tab` upon execution for immediate visual inspection.
-
-
--  #### Report (WebUI)
-
-<img width="1405" alt="image" src="https://github.com/user-attachments/assets/154a7b80-c79f-4cff-b76c-a0c1a6f71f51" />
-
-
-
-
+| Environment | Module system |
+|---|---|
+| Node.js 18 / 20 / 22 | ESM, CJS |
+| Browser (ES2018+) | ESM |
+| Vite + React | ESM |
+| Next.js | ESM, CJS |
 
 ---
 
 ## Install
 
 ```bash
-# use npm
-npm i @racgoo/scry
+# npm
+npm install @racgoo/scry
 
-# use yarn
+# yarn
 yarn add @racgoo/scry
+
+# pnpm
+pnpm add @racgoo/scry
 ```
+
+> **Note** – `zone.js` is **bundled** inside the package (`@racgoo/scry/zone`). You do **not** need to install `zone.js` separately or import it manually.
 
 ---
 
-## Usage
+## Setup: Babel plugin
 
-### 1. Babel Plugin Setting
+### Exported names
 
-Add the following plugin to your babel.config.js or .babelrc file
+| Export | Description |
+|---|---|
+| `scryBabelPlugin` | **Recommended.** Auto-detects ESM vs CJS per file. |
+| `scryBabelPluginForESM` | Force ESM mode (use when auto-detection fails). |
+| `scryBabelPluginForCJS` | Force CJS mode (use when auto-detection fails). |
 
-```jsx
-import { scryBabelPluginForESM, scryBabelPluginForCJS } from "@racgoo/scry/babel";
-//⚠️ Plugin setup may differ depending on the bundler you're using. ⚠️
-//If setting things up feels difficult, please refer to the "examples" in the GitHub repository.
+All three are exported from `@racgoo/scry/babel`.
 
-----------------------------------------------------------------------
-/*
-#vite example (vite.config.js)
-ESM and CJS have identical execution behavior when using bundlers like Vite, with the module system determined by the type field in package.json (e.g., "module" for ESM, or "commonjs" for CJS).
-When writing code, you should match your import or require usage to the module type defined in package.json. However, since Babel is used for transpilation, it's important to choose Babel plugins that are compatible with the final output module system.
-In the case of Vite, which produces ESM-based output, you should use Babel plugins that are compatible with ESM.import { defineConfig } from "vite";
-*/
+---
 
+### Vite + React (`vite.config.ts`)
+
+```ts
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { scryBabelPlugin } from "@racgoo/scry/babel";
 
 export default defineConfig({
-  resolve: {
-    preserveSymlinks: true,
-  },
   plugins: [
     react({
       babel: {
-        plugins: [scryBabelPluginForESM],
-//if transfiled output's module system is ESM, use scryBabelPluginESM
-//if transfiled output's  module system is CJS, use scryBabelPluginCJS
+        plugins: [scryBabelPlugin],
       },
     }),
   ],
 });
-
-----------------------------------------------------------------------
-/*
-#nodejs example (babel.config.js)
-In Node.js, you can also use either import or require based on the type field defined in package.json.
-However, when using Babel, you must choose and apply ESM or CJS-specific plugins based on the module system of the final transpiled output, not just the source code.
-*/
-
-1. ESM module system.(package.json.type === "module")
-import { scryBabelPluginESM } from "@racgoo/scry/babel"; 
-export default {
-  presets: [],
-  plugins: [scryBabelPluginESM], 
-//if transfiled output's module system is ESM, use scryBabelPluginESM
-//if transfiled output's  module system is CJS, use scryBabelPluginCJS
-
-};
-
-2. CJS module system.(package.json.type === "commonjs")
-const { scryBabelPluginCJS } = require("@racgoo/scry");
-module.exports = {
-  presets: [],
-  plugins: [scryBabelPluginCJS],
-//if transfiled output's module system is ESM, use scryBabelPluginESM
-//if transfiled output's  module system is CJS, use scryBabelPluginCJS};
-
-
 ```
 
-### 2. Execution Context Tracing
+### Vite + React + Emotion (`vite.config.ts`)
 
-All function and method calls executed between `Tracer.start()` and `Tracer.end()` will have their names, input values, and return values automatically logged and recorded.
+```ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { scryBabelPlugin } from "@racgoo/scry/babel";
 
-⚠️ Only works when NODE_ENV=development is set in your Node.js environment. ⚠️
+export default defineConfig({
+  plugins: [
+    react({
+      jsxImportSource: "@emotion/react",
+      babel: {
+        plugins: ["@emotion/babel-plugin", scryBabelPlugin],
+      },
+    }),
+  ],
+});
+```
 
-```jsx
+### Node.js — ESM (`babel.config.js`)
+
+```js
+import { scryBabelPlugin } from "@racgoo/scry/babel";
+
+export default {
+  presets: ["@babel/preset-typescript"],
+  plugins: [scryBabelPlugin],
+};
+```
+
+### Node.js — CJS (`babel.config.js`)
+
+```js
+const { scryBabelPlugin } = require("@racgoo/scry/babel");
+
+module.exports = {
+  presets: ["@babel/preset-typescript"],
+  plugins: [scryBabelPlugin],
+};
+```
+
+### Next.js (`next.config.js`)
+
+```js
+const { scryBabelPlugin } = require("@racgoo/scry/babel");
+
+module.exports = {
+  experimental: { forceSwcTransforms: false },
+  babel: {
+    plugins: [scryBabelPlugin],
+  },
+};
+```
+
+---
+
+## Plugin options
+
+Pass options as the second element in a `[plugin, options]` tuple:
+
+```ts
+import { scryBabelPlugin } from "@racgoo/scry/babel";
+
+react({
+  babel: {
+    plugins: [
+      [
+        scryBabelPlugin,
+        {
+          // Only instrument files matching these glob patterns (default: all source files).
+          include: ["src/**"],
+          // Skip files matching these patterns.
+          exclude: ["**/*.test.ts", "**/*.spec.ts"],
+          // Max Zone nesting depth before bypassing instrumentation (default: 50).
+          // Calls beyond this depth still execute — they are just not traced.
+          maxDepth: 30,
+        },
+      ],
+    ],
+  },
+}),
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `include` | `string[]` | all files (non-node_modules) | Glob patterns for files to instrument |
+| `exclude` | `string[]` | `[]` | Glob patterns for files to skip |
+| `maxDepth` | `number` | `50` | Max Zone nesting depth before bypassing tracing |
+
+> `node_modules` is **always excluded** regardless of `include`/`exclude`.
+
+---
+
+## Usage: Tracing
+
+```ts
 import { Tracer } from "@racgoo/scry";
 
-function foo(x: number) {
-  return x * 2;
+function add(a: number, b: number) {
+  return a + b;
 }
 
-function bar(y: number) {
-  return foo(y) + 1;
+async function fetchUser(id: string) {
+  const res = await fetch(`/api/users/${id}`);
+  return res.json();
 }
 
-Tracer.start("description_1");
-foo(2)
-bar(5);
+// All calls between start() and end() are recorded.
+Tracer.start("my-trace");
+add(1, 2);
+await fetchUser("42");
 Tracer.end();
+```
 
-Tracer.start("description_2");
-bar(7);
-foo(10)
-Tracer.end();
+### Report output
+
+| Environment | Where the report appears |
+|---|---|
+| **Browser** | Opens in a new tab via `window.open()` |
+| **Node.js** | Saved to `scry/report/` and auto-opened in a browser |
+
+<img width="1405" alt="Scry report" src="https://github.com/user-attachments/assets/154a7b80-c79f-4cff-b76c-a0c1a6f71f51" />
+
+---
+
+## Important notes
+
+### Plugin is no-op in production
+The Babel plugin checks `process.env.NODE_ENV` at transform time. Instrumentation code is **only injected when `NODE_ENV=development`**. Production builds are unaffected.
+
+### zone.js is bundled
+`zone.js` is **fully bundled** inside `dist/esm/zone-init.js` and `dist/cjs/zone-init.cjs` — you do not need `zone.js` as a peer or direct dependency. The plugin automatically injects `import "@racgoo/scry/zone"` at the top of every instrumented file.
+
+### pnpm / monorepo users
+Because `zone.js` is bundled rather than resolved from `node_modules`, the plugin works correctly in pnpm workspaces even if `zone.js` is not hoisted to the root.
+
+---
+
+## Package exports
+
+```
+@racgoo/scry         → Tracer, Extractor (runtime)
+@racgoo/scry/babel   → scryBabelPlugin, scryBabelPluginForESM, scryBabelPluginForCJS
+@racgoo/scry/zone    → bundled zone.js initialiser (injected automatically by the plugin)
 ```
 
 ---
 
-### 🔧 Future Work
+## Third-party licenses
 
-
-
-#### Improved error messaging
-
-error handling and clearer error messages are currently under development.😅
-
----
-
-### 🔧 Bugs 
-##### Function, Class source code extracting is not working..(fixed)
-##### Trace.start() ~~ Trace.end() pattern cannot be twice in runtime..(fixed)
-
-
-believe me!
+| Package | License |
+|---|---|
+| [zone.js](https://github.com/angular/angular) | MIT |
+| [Day.js](https://github.com/iamkun/dayjs) | MIT |
+| [flatted](https://github.com/WebReflection/flatted) | ISC |
+| [js-base64](https://github.com/dankogai/js-base64) | BSD-3-Clause |
 
 ---
 
-### Third Party Licenses
+## Contact
 
-This project uses the following third-party packages:
-
-- [Day.js](https://github.com/iamkun/dayjs) - MIT License
-- [Zone.js](https://github.com/angular/angular) - MIT License
-- [flatted](https://github.com/WebReflection/flatted) - ISC License
-- [js-base64](https://github.com/dankogai/js-base64) - BSD-3-Clause License
----
-
-### Contact
-
-###### Have questions, suggestions, bugs, or want to contribute?
-
-###### Feel free to reach out at
-
+Have questions, suggestions, or want to contribute?  
 [[📬 send mail]](mailto:lhsung98@naver.com)
