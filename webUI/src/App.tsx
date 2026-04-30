@@ -4,6 +4,7 @@ import { useInjectionMeta } from "./hooks/useInjectionMeta";
 import { Header } from "./components/Header";
 import { TraceList } from "./components/TraceList";
 import { NodeDetailModal } from "./components/NodeDetailModal";
+import { EmptyDiagnostic } from "./components/EmptyDiagnostic";
 import type { TraceNode } from "./types/injection";
 import "./App.css";
 
@@ -12,8 +13,10 @@ function App() {
   const { meta } = useInjectionMeta();
   const [selected, setSelected] = useState<TraceNode | null>(null);
 
-  // Roots: nodes that are not children of any other node.  flatted
-  // round-trips parent references, so we trust them when present.
+  // Tracer.end() already feeds us a list of roots (the node generator only
+  // pushes nodes whose parentTraceId can't be resolved into the result).
+  // We still defensively filter in case future code paths inject the full
+  // tree — flatted round-trips parent refs, so this stays correct.
   const roots = useMemo(() => {
     const haveParent = data.some((n) => n.parent);
     return haveParent ? data.filter((n) => !n.parent) : data;
@@ -28,10 +31,7 @@ function App() {
       />
       <main className="main">
         {roots.length === 0 ? (
-          <div className="empty">
-            No traced calls were recorded between{" "}
-            <code>Tracer.start()</code> and <code>Tracer.end()</code>.
-          </div>
+          <EmptyDiagnostic data={data} />
         ) : (
           <TraceList nodes={roots} onSelect={setSelected} />
         )}
