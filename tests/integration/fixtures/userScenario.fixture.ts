@@ -54,3 +54,18 @@ export const runArrowAndFnExpr = () => {
   };
   return fn(Math.floor(Math.random() * 5));
 };
+
+// ── Pattern 7: `f(await x())` — call with an awaited argument ──
+// Reproduces user report from Hoguma-console: `zipFiles(await someAsync())`
+// produced "Uncaught SyntaxError: Unexpected reserved word" because the
+// plugin wrapped the outer call in a sync arrow whose body contained the
+// untouched `await`.
+async function asyncSource(): Promise<number> {
+  return 42;
+}
+function consume(n: number): number {
+  return n + 1;
+}
+export async function runAwaitInArg(): Promise<number> {
+  return consume(await asyncSource());
+}

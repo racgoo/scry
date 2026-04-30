@@ -1,7 +1,11 @@
 import { TraceNode } from "../node";
 import { Environment } from "../../utils/enviroment.js";
 import { WebUIStrategy } from "./exportStrategies/webUI.js";
-import { ExporterInterface, ExporterStrategyInterface } from "./interface.js";
+import {
+  ExporterInterface,
+  ExporterStrategyInterface,
+  TraceReportMeta,
+} from "./interface.js";
 import { BrowserStrategy } from "./rumTImeStrategies/BrowserStrategy.js";
 import { NodeStrategy } from "./rumTImeStrategies/NodeStrategy.js";
 
@@ -15,8 +19,8 @@ class Exporter implements ExporterInterface {
   }
 
   //Open browser with file path
-  public export(data: TraceNode[]) {
-    this.exportStrategy.export(data);
+  public export(data: TraceNode[], meta: TraceReportMeta) {
+    this.exportStrategy.export(data, meta);
   }
 
   public exportToHtml(html: string) {

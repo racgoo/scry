@@ -1,4 +1,5 @@
-//이건 Scry에 있는거라 모노레포로 바꾸면 좋을듯???
+// Mirror of src/tracer/node/type.ts in the main package — kept inline so the
+// WebUI builds standalone (it gets bundled into a single self-contained HTML).
 
 interface TraceNodeContext {
   params: string;
@@ -22,7 +23,7 @@ interface TraceNode {
   errored: boolean;
   completed: boolean;
   chained?: boolean;
-  parentTraceId?: number;
+  parentTraceId?: number | null;
   classCode?: string;
   methodCode?: string;
   functionCode?: string;
@@ -30,10 +31,15 @@ interface TraceNode {
   chainInfo?: TraceChainInfo;
 }
 
-export type { TraceNode, TraceNodeContext };
+export type { TraceNode, TraceNodeContext, TraceChainInfo };
 
 declare global {
   interface Window {
     __INJECTION_DATA__: string;
+    __INJECTION_META__?: {
+      description: string;
+      startTimeISO: string;
+      durationMs: number;
+    };
   }
 }

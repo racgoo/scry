@@ -374,9 +374,62 @@ function transformCall(
     return;
   }
 
-  const awaitExpression = path.findParent((p) => p.isAwaitExpression())
-    ? true
-    : false;
+  // The wrapping IIFE must be async if EITHER:
+  //   (a) the call itself is inside an `await` (so the outer caller awaits us), or
+  //   (b) any argument of this call is/contains an `await` (the IIFE body
+  //       evaluates the args, so it must be async to legally use `await`).
+  // (b) is the case for `f(await x())` — without it the generated arrow's
+  // body holds an `await` in non-async context: SyntaxError "Unexpected
+  // reserved word".  Real-world: zipFiles(await someAsync()).
+  const inAwaitParent = !!path.findParent((p) => p.isAwaitExpression());
+  let argsContainAwait = false;
+  for (const arg of path.node.arguments) {
+    if (!arg) continue;
+    if (t.isAwaitExpression(arg)) {
+      argsContainAwait = true;
+      break;
+    }
+    // Cheap nested-await check via JSON walk — args are usually small.
+    try {
+      // Babel nodes are non-cyclical here.
+      const stack: babel.types.Node[] = [arg as babel.types.Node];
+      while (stack.length) {
+        const n = stack.pop()!;
+        if (t.isAwaitExpression(n)) {
+          argsContainAwait = true;
+          break;
+        }
+        // Don't descend into nested function/arrow bodies — their `await`
+        // belongs to that inner function, not ours.
+        if (
+          t.isArrowFunctionExpression(n) ||
+          t.isFunctionExpression(n) ||
+          t.isFunctionDeclaration(n)
+        ) {
+          continue;
+        }
+        for (const k of Object.keys(n)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const v = (n as any)[k];
+          if (v && typeof v === "object") {
+            if (Array.isArray(v)) {
+              for (const item of v) {
+                if (item && typeof item === "object" && "type" in item) {
+                  stack.push(item);
+                }
+              }
+            } else if ("type" in v) {
+              stack.push(v);
+            }
+          }
+        }
+      }
+      if (argsContainAwait) break;
+    } catch {
+      // fall through
+    }
+  }
+  const awaitExpression = inAwaitParent || argsContainAwait;
   const chained = scryChecker.isChainedFunction(path);
   const fnName = scryAst.getFunctionName(path);
 
@@ -424,7 +477,7 @@ function transformCall(
         maxDepthGuardNode,
         scryAst.createNewZoneContextWithTraceId(),
         scryAst.createDeclareTraceZoneWithTraceId(),
-        scryAst.craeteOriginCallExecutor(path, state, chained),
+        scryAst.craeteOriginCallExecutor(path, state, chained, awaitExpression),
         t.expressionStatement(
           t.assignmentExpression(
             "=",
