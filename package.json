@@ -29,6 +29,10 @@
     "README.md",
     "LICENSE"
   ],
+  "sideEffects": [
+    "./dist/esm/zone-init.js",
+    "./dist/cjs/zone-init.cjs"
+  ],
   "scripts": {
     "inject-webui": "node scripts/embad-webui.js",
     "build": "pnpm run build:esm && pnpm run build:cjs && node scripts/bundle-zone.js && node scripts/embad-webui.js",
@@ -39,7 +43,6 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src --ext .ts",
-    "example": "ts-node examples/test.ts",
     "prepare": "pnpm run build",
     "release": "pnpm run prepare && npm version patch && npm publish --access=public"
   },
