@@ -1,17 +1,29 @@
 // scripts/fix-cjs.js
+// Renames dist/cjs/**/*.js → *.cjs and rewrites internal import/require paths.
+// Uses only Node.js built-ins so no extra dependencies are required.
 import fs from "fs";
 import path from "path";
-import pkg from "glob";
-const { glob } = pkg;
-
 import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const files = glob.sync(path.resolve(__dirname, "../dist/cjs/**/*.js"));
+function findJsFiles(dir) {
+  const results = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...findJsFiles(full));
+    } else if (entry.isFile() && entry.name.endsWith(".js")) {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
+const cjsDir = path.resolve(__dirname, "../dist/cjs");
+const files = findJsFiles(cjsDir);
+
 files.forEach((file) => {
-  // 2. import문의 확장자도 수정
   let content = fs.readFileSync(file, "utf8");
   content = content.replace(/from ["'](\.\.\/.+?)\.js["']/g, 'from "$1.cjs"');
   content = content.replace(/from ["'](\.\/.+?)\.js["']/g, 'from "$1.cjs"');
@@ -24,8 +36,7 @@ files.forEach((file) => {
     'require("$1.cjs")'
   );
 
-  // 3. 파일명 변경
-  const newFile = file.replace(".js", ".cjs");
+  const newFile = file.replace(/\.js$/, ".cjs");
   fs.writeFileSync(newFile, content);
-  fs.unlinkSync(file); // 원본 삭제
+  fs.unlinkSync(file);
 });

@@ -1,5 +1,6 @@
 import { NodeGenerator } from "./nodeGenerator.js";
 import { NodeGeneratorInterface } from "./interface.js";
-import { TraceNode } from "./type.js";
+import type { TraceNode } from "./type.js";
 
-export { NodeGeneratorInterface, NodeGenerator, TraceNode };
+export { NodeGeneratorInterface, NodeGenerator };
+export type { TraceNode };

@@ -20,7 +20,7 @@ interface TraceNode {
   errored: boolean;
   completed: boolean;
   chained?: boolean;
-  parentTraceId?: number;
+  parentTraceId?: number | null;
   classCode?: string;
   methodCode?: string;
   functionCode?: string;

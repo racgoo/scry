@@ -176,7 +176,7 @@ class NodeGenerator {
     reversedChainedTraceIdGroups: number[][]
   ) {
     //Iterate reversedChainedTraceIdGroups for updating trace node map state
-    reversedChainedTraceIdGroups.some((reversedChainedTraceIdGroup) => {
+    reversedChainedTraceIdGroups.forEach((reversedChainedTraceIdGroup) => {
       //Chain root parent trace id(first chained trace's parent trace id)
       const rootParentTraceId = traceNodeMap.get(
         reversedChainedTraceIdGroup[0]
@@ -210,27 +210,24 @@ class NodeGenerator {
     //Create new trace node map, because, Map is ordered by insertion order
     const newTraceNodeMap = new Map<number, TraceNode>();
     //Sort and update newTraceNodeMap
+    // Single comparator: primary key = traceId, secondary key = chainInfo.index
+    // (within the same chain group). Two separate .sort() calls were used before,
+    // but chaining sorts is unreliable — the second sort can disturb the first
+    // sort's order for elements that compare equal.
     Array.from(traceNodeMap.values())
-      //Sort by trace id(sort by trace id, because trace id sort must be first srt)
       .sort((a, b) => {
-        if (a.traceId && b.traceId) {
-          return a.traceId - b.traceId;
+        const traceIdDiff = (a.traceId ?? 0) - (b.traceId ?? 0);
+        if (traceIdDiff !== 0) return traceIdDiff;
+        if (
+          a.chainInfo &&
+          b.chainInfo &&
+          a.chainInfo.startTraceId === b.chainInfo.startTraceId
+        ) {
+          return a.chainInfo.index - b.chainInfo.index;
         }
         return 0;
       })
-      //Sort by chain index(chained sort must be second sort)
-      //must be chain node, when same start trace id, sort by chain index
-      //
-      .sort((a, b) => {
-        if (a.chainInfo && b.chainInfo) {
-          if (a.chainInfo.startTraceId === b.chainInfo.startTraceId) {
-            return a.chainInfo.index - b.chainInfo.index;
-          }
-        }
-        return 0;
-      })
-      .some((node) => {
-        //insert sorted node to newTraceNodeMap
+      .forEach((node) => {
         newTraceNodeMap.set(node.traceId, node);
       });
     return newTraceNodeMap;

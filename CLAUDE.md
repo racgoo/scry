@@ -2,6 +2,11 @@
 
 Scry is a JavaScript/TypeScript execution flow tracer that instruments code at **compile time** (Babel AST plugin) and collects call graphs at **runtime** (Zone.js + event system).
 
+> **Rule files** (also used by Cursor — read these for detailed conventions):
+> - [.cursor/rules/project-overview.mdc](.cursor/rules/project-overview.mdc) — project structure, core constraints, build commands
+> - [.cursor/rules/babel-plugin.mdc](.cursor/rules/babel-plugin.mdc) — generated IIFE structure, AST authoring rules, skip conditions
+> - [.cursor/rules/git-workflow.mdc](.cursor/rules/git-workflow.mdc) — branch strategy, commit/PR procedure, safety rules
+
 ---
 
 ## Build & Run
@@ -63,6 +68,8 @@ Source code
 
 ## Plugin Conventions
 
+See [.cursor/rules/babel-plugin.mdc](.cursor/rules/babel-plugin.mdc) for full rules. Summary:
+
 - Every `CallExpression.exit` visitor call generates an IIFE with:
   1. `traceId` (global auto-increment counter)
   2. `Zone.fork()` with `traceContext` and `_depth` (for maxDepth guard)
@@ -91,25 +98,51 @@ Source code
 
 ## Git Workflow
 
-Branch naming: `fix/<topic>`, `feat/<topic>`, `refactor/<topic>`
+See [.cursor/rules/git-workflow.mdc](.cursor/rules/git-workflow.mdc) for full procedure. Summary:
+
+### Branch Strategy (GitFlow Lite)
+
+```
+main ──────────────────────► releases only (npm publish)
+        ↑
+develop ───────────────────► integration branch — ALL PR base
+    ↑        ↑        ↑
+feat/*    fix/*   chore/*  refactor/*  docs/*
+```
+
+| Branch | Purpose | PR target |
+|--------|---------|-----------|
+| `main` | Stable releases only. No direct push. | — |
+| `develop` | Integration. Base for all feature/fix branches. | `main` (on release) |
+| `feat/<topic>` | New feature | `develop` |
+| `fix/<topic>` | Bug fix | `develop` |
+| `refactor/<topic>` | Structural changes, no behaviour change | `develop` |
+| `chore/<topic>` | Build, deps, config | `develop` |
+| `docs/<topic>` | Documentation only | `develop` |
+| `hotfix/<topic>` | Production emergency patch | `main` direct (then cherry-pick to `develop`) |
+
+### Commands
 
 ```bash
-# One-time setup (needed before push/PR commands work)
+# One-time setup
 brew install gh
 gh auth login   # choose HTTPS, browser auth — use the racgoo account
 
+# Start work (always branch from develop)
+git checkout develop && git pull
+git checkout -b fix/my-fix
+
 # Commit and push
-git checkout -b feat/my-feature
 git add <files>
-git commit -m "feat: ..."
+git commit -m "fix: ..."
 git push -u origin HEAD
 
-# Open PR
-gh pr create --fill
+# Open PR targeting develop
+gh pr create --base develop --title "fix: ..." --body "..."
 ```
 
-> GitHub remote is `https://github.com/racgoo/scry.git`.  
-> The account that owns the repo is **racgoo** (`lhsung98@naver.com`).  
+> GitHub remote: `git@racgoo:racgoo/scry.git` (SSH).  
+> Account: **racgoo** (`lhsung98@naver.com`).  
 > If `git push` returns 403, run `gh auth login` and pick the racgoo account.
 
 ## Package Info

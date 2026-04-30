@@ -160,6 +160,28 @@ class ScryAst {
       | babel.types.ClassMethod
     >
   ) {
+    // Idempotency guard: do not inject var traceContext twice into the same
+    // scope. This can happen when Babel re-traverses the plugin-generated IIFE
+    // after path.replaceWith() — the ArrowFunctionExpression visitor fires for
+    // the new IIFE's arrow and would otherwise produce a duplicate declaration.
+    const existingBody = path.isProgram()
+      ? (path.node.body as babel.types.Statement[])
+      : (path.node.body as babel.types.BlockStatement)?.body;
+    if (
+      existingBody?.some(
+        (n) =>
+          this.t.isVariableDeclaration(n) &&
+          n.declarations.some(
+            (d) =>
+              this.t.isIdentifier(d.id, {
+                name: ScryAstVariable.traceContext,
+              })
+          )
+      )
+    ) {
+      return;
+    }
+
     const parentDecl = this.t.variableDeclaration("var", [
       this.t.variableDeclarator(
         this.t.identifier(ScryAstVariable.traceContext),
@@ -230,6 +252,10 @@ class ScryAst {
         ),
       ]);
     } else {
+      // callee can be Identifier, CallExpression, ArrowFunctionExpression, etc.
+      // We pass it as-is (any Expression evaluates to the function at runtime).
+      // The previous cast to Identifier was incorrect for non-identifier callees
+      // such as IIFEs or higher-order calls like getFunc()().
       return this.t.variableDeclaration("const", [
         this.t.variableDeclarator(
           this.t.identifier("code"),
@@ -241,8 +267,7 @@ class ScryAst {
             [
               this.t.nullLiteral(),
               this.t.nullLiteral(),
-              // this.t.stringLiteral(originCode),
-              callee as babel.types.Identifier,
+              callee as babel.types.Expression,
             ]
           )
         ),
@@ -313,10 +338,45 @@ class ScryAst {
     }
   }
 
-  // Add Zone.root initialization code if not initialized(on Program level)
+  // Add Zone.root initialization code if not initialized(on Program level).
+  // Uses Object.assign to MERGE into the existing _properties object rather than
+  // replacing it entirely. A full assignment wipes any internal Zone.js fields
+  // that were already stored there, breaking Zone.js runtime behaviour.
   public createZoneRootInitialization(
     path: babel.NodePath<babel.types.Program>
   ) {
+    // Build the Object.assign(...) call and mark it so the CallExpression.exit
+    // visitor (isDuplicateFunction check) skips re-instrumenting it.  Without
+    // this guard the injected call gets wrapped in a tracing IIFE that fires at
+    // module-load time, before Zone.root._properties.traceContext is populated,
+    // producing "Cannot read properties of undefined (reading 'traceBundleId')".
+    const assignCall = this.t.callExpression(
+      this.t.memberExpression(
+        this.t.identifier("Object"),
+        this.t.identifier("assign")
+      ),
+      [
+        this.t.logicalExpression(
+          "??",
+          this.t.memberExpression(
+            this.t.memberExpression(
+              this.t.identifier("Zone"),
+              this.t.identifier("root")
+            ),
+            this.t.identifier(ScryAstVariable._properties)
+          ),
+          this.t.objectExpression([])
+        ),
+        this.t.objectExpression([
+          this.t.objectProperty(
+            this.t.identifier(ScryAstVariable.traceContext),
+            this.t.identifier(ScryAstVariable.traceContext)
+          ),
+        ]),
+      ]
+    );
+    this.t.addComment(assignCall, "leading", ` ${TRACE_MARKER} `);
+
     path.node.body.unshift(
       this.t.blockStatement([
         this.t.expressionStatement(
@@ -329,12 +389,7 @@ class ScryAst {
               ),
               this.t.identifier(ScryAstVariable._properties)
             ),
-            this.t.objectExpression([
-              this.t.objectProperty(
-                this.t.identifier(ScryAstVariable.traceContext),
-                this.t.identifier(ScryAstVariable.traceContext)
-              ),
-            ])
+            assignCall
           )
         ),
       ])
@@ -383,33 +438,96 @@ class ScryAst {
   }
 
   //Add Zone.js import or require statement(on Program level)
+  // Always uses `@racgoo/scry/zone` (which bundles zone.js) so that zone.js is
+  // never resolved as a bare specifier from the consumer project root.
+  // In pnpm workspaces, bare `import "zone.js"` in a consumer file would fail
+  // because zone.js is only a transitive dependency (not directly installed).
+  // Bundling zone.js inside `@racgoo/scry/zone` eliminates that dependency entirely.
   public createZoneJSDeclaration(
     path: babel.NodePath<babel.types.Program>,
     esm: boolean
   ) {
     const scryChecker = new ScryChecker(this.t);
-    const zoneJSImported = scryChecker.isImportedWithoutVariableDeclaration(
-      path,
-      "zone.js",
-      esm
-    );
-    if (zoneJSImported) {
-      return;
-    }
+
     if (esm) {
-      //For esm target
+      // Replace any existing bare `import "zone.js"` with the scry-bundled version.
+      // A bare zone.js import may have been injected by an older version of this
+      // plugin that did not yet bundle zone.js, or added manually by the user.
+      // Leaving it in place would cause "Failed to resolve import 'zone.js'" in
+      // Vite/pnpm environments where zone.js is not a direct project dependency.
+      for (let i = 0; i < path.node.body.length; i++) {
+        const node = path.node.body[i];
+        if (
+          node.type === "ImportDeclaration" &&
+          node.source.value === "zone.js" &&
+          node.specifiers.length === 0
+        ) {
+          // Swap to @racgoo/scry/zone in-place to preserve original position.
+          (node.source as babel.types.StringLiteral).value = "@racgoo/scry/zone";
+          return;
+        }
+      }
+
+      // Skip if already using the bundled path.
+      if (
+        scryChecker.isImportedWithoutVariableDeclaration(
+          path,
+          "@racgoo/scry/zone",
+          esm
+        )
+      ) {
+        return;
+      }
+
       path.node.body.unshift(
-        this.t.importDeclaration([], this.t.stringLiteral("zone.js"))
+        this.t.importDeclaration([], this.t.stringLiteral("@racgoo/scry/zone"))
       );
     } else {
-      //For commonjs target
-      path.node.body.unshift(
-        this.t.expressionStatement(
-          this.t.callExpression(this.t.identifier("require"), [
-            this.t.stringLiteral("zone.js/mix"),
-          ])
-        )
-      );
+      // CJS: replace require("zone.js") calls and inject require("@racgoo/scry/zone")
+      let replaced = false;
+      for (let i = 0; i < path.node.body.length; i++) {
+        const node = path.node.body[i];
+        if (
+          node.type === "ExpressionStatement" &&
+          node.expression.type === "CallExpression" &&
+          this.t.isIdentifier(
+            (node.expression as babel.types.CallExpression).callee,
+            { name: "require" }
+          ) &&
+          (node.expression as babel.types.CallExpression).arguments.length ===
+            1 &&
+          this.t.isStringLiteral(
+            (node.expression as babel.types.CallExpression).arguments[0],
+            { value: "zone.js" }
+          )
+        ) {
+          (
+            (node.expression as babel.types.CallExpression)
+              .arguments[0] as babel.types.StringLiteral
+          ).value = "@racgoo/scry/zone";
+          replaced = true;
+          break;
+        }
+      }
+
+      if (!replaced) {
+        if (
+          scryChecker.isImportedWithoutVariableDeclaration(
+            path,
+            "@racgoo/scry/zone",
+            esm
+          )
+        ) {
+          return;
+        }
+        path.node.body.unshift(
+          this.t.expressionStatement(
+            this.t.callExpression(this.t.identifier("require"), [
+              this.t.stringLiteral("@racgoo/scry/zone"),
+            ])
+          )
+        );
+      }
     }
   }
 
@@ -573,19 +691,37 @@ class ScryAst {
    * Generated code:
    *   if ((Zone.current._properties?._depth ?? 0) >= maxDepth) return <originalNode>;
    */
+  // Zone.js stores fork properties at zone._properties, not as direct own
+  // properties on the zone object. The previous code read Zone.current["_depth"]
+  // which always returned undefined (the zone object has no "_depth" property),
+  // making maxDepth effectively never trigger.
   public createMaxDepthGuard(
     maxDepth: number,
     originalNode: babel.types.CallExpression | babel.types.NewExpression
   ) {
+    // Clone the original node so the max-depth early-return is not
+    // re-instrumented during the Babel re-traversal that follows
+    // path.replaceWith().  Without the TRACE_MARKER comment the cloned node
+    // would be treated as fresh user code and wrapped in yet another IIFE,
+    // leading to infinite recursion ("Maximum call stack size exceeded").
+    const safeReturn = this.t.cloneNode(originalNode, true);
+    safeReturn.leadingComments = [
+      { type: "CommentBlock", value: ` ${TRACE_MARKER} ` },
+    ];
+
     return this.t.ifStatement(
       this.t.binaryExpression(
         ">=",
         this.t.logicalExpression(
           "??",
+          // Zone.current._properties?.["_depth"]
           this.t.optionalMemberExpression(
             this.t.memberExpression(
-              this.t.identifier("Zone"),
-              this.t.identifier("current")
+              this.t.memberExpression(
+                this.t.identifier("Zone"),
+                this.t.identifier("current")
+              ),
+              this.t.identifier(ScryAstVariable._properties)
             ),
             this.t.stringLiteral("_depth"),
             true,
@@ -595,7 +731,7 @@ class ScryAst {
         ) as babel.types.Expression,
         this.t.numericLiteral(maxDepth)
       ),
-      this.t.blockStatement([this.t.returnStatement(originalNode)])
+      this.t.blockStatement([this.t.returnStatement(safeReturn)])
     );
   }
 
@@ -711,17 +847,23 @@ class ScryAst {
                     ])
                   ),
                   //Track Zone nesting depth so the maxDepth guard can do an O(1) check.
-                  //Inherits parent depth via Zone.current._properties?._depth ?? 0 and adds 1.
+                  //Inherits parent depth via Zone.current._properties?.["_depth"] ?? 0 and adds 1.
+                  //Must read from _properties (not Zone.current directly) because Zone.js
+                  //stores fork properties at zone._properties, not as own zone properties.
                   this.t.objectProperty(
                     this.t.identifier("_depth"),
                     this.t.binaryExpression(
                       "+",
                       this.t.logicalExpression(
                         "??",
+                        // Zone.current._properties?.["_depth"]
                         this.t.optionalMemberExpression(
                           this.t.memberExpression(
-                            this.t.identifier("Zone"),
-                            this.t.identifier("current")
+                            this.t.memberExpression(
+                              this.t.identifier("Zone"),
+                              this.t.identifier("current")
+                            ),
+                            this.t.identifier(ScryAstVariable._properties)
                           ),
                           this.t.stringLiteral("_depth"),
                           true,
@@ -851,10 +993,25 @@ class ScryAst {
                             ),
                             this.t.identifier("then")
                           ),
+                          // Pass both onFulfilled and onRejected so that a rejected
+                          // Promise still emits the done event and cleans up
+                          // activeTraceIdSet. Without onRejected, rejected Promises
+                          // would leave the traceId in activeTraceIdSet indefinitely
+                          // (until the waitAllContextDone timeout fires).
                           [
+                            // onFulfilled: capture resolved value, emit exit then done
                             this.t.arrowFunctionExpression(
-                              [],
+                              [this.t.identifier("value")],
                               this.t.blockStatement([
+                                this.t.expressionStatement(
+                                  this.t.assignmentExpression(
+                                    "=",
+                                    this.t.identifier(
+                                      ScryAstVariable.returnValue
+                                    ),
+                                    this.t.identifier("value")
+                                  )
+                                ),
                                 this.t.variableDeclaration("let", [
                                   this.t.variableDeclarator(
                                     this.t.identifier(
@@ -877,6 +1034,70 @@ class ScryAst {
                                     )
                                   ),
                                 ]),
+                                this.t.expressionStatement(
+                                  this.emitTraceEvent(
+                                    this.getEventDetail(path, state, {
+                                      type: "exit",
+                                      fnName: this.getFunctionName(path),
+                                      chained: false,
+                                    })
+                                  )
+                                ),
+                                this.t.expressionStatement(
+                                  this.emitTraceEvent(
+                                    this.getEventDetail(path, state, {
+                                      type: "done",
+                                      fnName: this.getFunctionName(path),
+                                      chained: false,
+                                    })
+                                  )
+                                ),
+                              ])
+                            ),
+                            // onRejected: capture rejection reason, emit exit then done
+                            this.t.arrowFunctionExpression(
+                              [this.t.identifier("reason")],
+                              this.t.blockStatement([
+                                this.t.expressionStatement(
+                                  this.t.assignmentExpression(
+                                    "=",
+                                    this.t.identifier(
+                                      ScryAstVariable.returnValue
+                                    ),
+                                    this.t.identifier("reason")
+                                  )
+                                ),
+                                this.t.variableDeclaration("let", [
+                                  this.t.variableDeclarator(
+                                    this.t.identifier(
+                                      ScryAstVariable.traceContext
+                                    ),
+                                    this.t.memberExpression(
+                                      this.t.memberExpression(
+                                        this.t.memberExpression(
+                                          this.t.identifier("Zone"),
+                                          this.t.identifier("current")
+                                        ),
+                                        this.t.identifier(
+                                          ScryAstVariable._properties
+                                        )
+                                      ),
+                                      this.t.stringLiteral(
+                                        ScryAstVariable.traceContext
+                                      ),
+                                      true
+                                    )
+                                  ),
+                                ]),
+                                this.t.expressionStatement(
+                                  this.emitTraceEvent(
+                                    this.getEventDetail(path, state, {
+                                      type: "exit",
+                                      fnName: this.getFunctionName(path),
+                                      chained: false,
+                                    })
+                                  )
+                                ),
                                 this.t.expressionStatement(
                                   this.emitTraceEvent(
                                     this.getEventDetail(path, state, {
@@ -934,9 +1155,12 @@ class ScryAst {
     }
     //Create try block
     const tryBlock = this.t.blockStatement([resultAst]);
-    //Create catch clause: record the error as returnValue, emit exit event for observability,
-    //clean up the Zone entry to prevent memory leak, then rethrow to preserve original call semantics.
-    //Without rethrow, user try/catch blocks around traced functions would silently swallow errors.
+    // Catch clause: on synchronous throw the Zone.run callback propagates the
+    // error here. Without explicit exit/done emissions, activeTraceIdSet keeps
+    // the traceId until the timeout fires and the trace tree shows an incomplete
+    // node with no returnValue. We emit both events before rethrowing so the
+    // tracing infrastructure always sees a matched enter→exit→done sequence.
+    const fnName = this.getFunctionName(path);
     const catchClause = this.t.catchClause(
       this.t.identifier("error"),
       this.t.blockStatement([
@@ -947,7 +1171,45 @@ class ScryAst {
             this.t.identifier("error")
           )
         ),
-        //Clean up Zone entry on error path to prevent memory leak
+        // Re-capture traceContext from the current (parent) Zone so that
+        // traceBundleId / parentTraceId are available for the events below.
+        this.t.variableDeclaration("let", [
+          this.t.variableDeclarator(
+            this.t.identifier(ScryAstVariable.traceContext),
+            this.t.memberExpression(
+              this.t.memberExpression(
+                this.t.memberExpression(
+                  this.t.identifier("Zone"),
+                  this.t.identifier("current")
+                ),
+                this.t.identifier(ScryAstVariable._properties)
+              ),
+              this.t.stringLiteral(ScryAstVariable.traceContext),
+              true
+            )
+          ),
+        ]),
+        // emit exit so the trace node records the error as its returnValue
+        this.t.expressionStatement(
+          this.emitTraceEvent(
+            this.getEventDetail(path, state, {
+              type: "exit",
+              fnName,
+              chained: false,
+            })
+          )
+        ),
+        // emit done so activeTraceIdSet is cleaned up without waiting for timeout
+        this.t.expressionStatement(
+          this.emitTraceEvent(
+            this.getEventDetail(path, state, {
+              type: "done",
+              fnName,
+              chained: false,
+            })
+          )
+        ),
+        // Clean up Zone entry on error path to prevent memory leak
         this.t.expressionStatement(
           this.t.unaryExpression(
             "delete",
@@ -1226,7 +1488,8 @@ class ScryAst {
     const callee = path.node.callee;
     let fnName = ANONYMOUS_FUNCTION_NAME;
     if (this.t.isIdentifier(callee)) {
-      fnName = callee.name;
+      // new Foo() → "new Foo", plain call foo() → "foo"
+      fnName = path.isNewExpression() ? `new ${callee.name}` : callee.name;
     } else if (
       this.t.isMemberExpression(callee) &&
       this.t.isIdentifier(callee.property)

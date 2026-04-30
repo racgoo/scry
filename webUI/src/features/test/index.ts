@@ -1,3 +1,3 @@
-import Com1 from "./components/Com1";
+import TestComp1 from "./components/TestComp1";
 
-export { Com1 };
+export { TestComp1 };

@@ -7,34 +7,30 @@ class ZoneContext implements ZoneContextInterface {
    * Zone.current is used for function-level execution context, while Zone.root is used for file-level execution
    * This ensures that subsequent logic tracks based on the updated state
    */
+  // Safely access or initialise _properties.traceContext on a Zone instance.
+  // Zone.root._properties starts as {} — traceContext is injected by the babel
+  // plugin at Program.enter, but Tracer.start() / Tracer.end() can be called
+  // before any instrumented file runs (e.g. in test setup), so we must guard.
+  private ensureTraceContext(zone: Zone) {
+    const props = (zone as unknown as { _properties: Record<string, unknown> })
+      ._properties;
+    if (!props.traceContext) {
+      props.traceContext = { traceBundleId: null, parentTraceId: null };
+    }
+    return props.traceContext as {
+      traceBundleId: number | null;
+      parentTraceId: number | null;
+    };
+  }
+
   public updateCurrentAndRootZoneBundleId(bundleId: number | null) {
-    //Update current zone state
-    (
-      Zone.current as unknown as {
-        _properties: { traceContext: { traceBundleId: number | null } };
-      }
-    )._properties.traceContext.traceBundleId = bundleId;
-    //Update root zone state
-    (
-      Zone.root as unknown as {
-        _properties: { traceContext: { traceBundleId: number | null } };
-      }
-    )._properties.traceContext.traceBundleId = bundleId;
+    this.ensureTraceContext(Zone.current).traceBundleId = bundleId;
+    this.ensureTraceContext(Zone.root).traceBundleId = bundleId;
   }
 
   public updateCurrentAndRootZoneParentTraceId(parentTraceId: number | null) {
-    //Update current zone state
-    (
-      Zone.current as unknown as {
-        _properties: { traceContext: { parentTraceId: number | null } };
-      }
-    )._properties.traceContext.parentTraceId = parentTraceId;
-    //Update root zone state
-    (
-      Zone.root as unknown as {
-        _properties: { traceContext: { parentTraceId: number | null } };
-      }
-    )._properties.traceContext.parentTraceId = parentTraceId;
+    this.ensureTraceContext(Zone.current).parentTraceId = parentTraceId;
+    this.ensureTraceContext(Zone.root).parentTraceId = parentTraceId;
   }
 }
 

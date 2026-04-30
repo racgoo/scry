@@ -1,3 +1,3 @@
-import { Com1 } from "@features/test";
+import { TestComp1 } from "@features/test";
 
-export { Com1 };
+export { TestComp1 };

@@ -73,30 +73,40 @@ class Tracer {
     //in Promise, return value is resolved when 'then' trigger
     //in Object, return value is resolved automatically when context is done
     const asyncTaskLoading = this.recorder.waitAllContextDone(endBundleId);
-    //Wait for all return values to be resolved
-    asyncTaskLoading.then(async () => {
-      //Get current bundle details
-      const currentBundleDetails =
-        this.recorder.getBundleMap().get(endBundleId)?.details || [];
-      //Make trace tree(hierarchical tree structure by call)
-      const traceNodes: TraceNode[] =
-        this.nodeGenerator.generateNodesWithTraceDetails(currentBundleDetails);
-      //Update duration
-      this.recorder.getBundleMap().get(endBundleId)!.duration = dayjs().diff(
-        this.recorder.getBundleMap().get(endBundleId)!.startTime,
-        "ms"
-      );
+    asyncTaskLoading
+      .then(async (completed) => {
+        if (!completed) {
+          Output.printError(
+            "Tracer.end(): some async traces did not complete before the timeout. " +
+            "The report may be incomplete. Consider increasing the timeout or " +
+            "ensuring all async operations finish before calling Tracer.end()."
+          );
+        }
+        //Get current bundle details
+        const currentBundleDetails =
+          this.recorder.getBundleMap().get(endBundleId)?.details || [];
+        //Make trace tree(hierarchical tree structure by call)
+        const traceNodes: TraceNode[] =
+          this.nodeGenerator.generateNodesWithTraceDetails(currentBundleDetails);
+        //Update duration
+        this.recorder.getBundleMap().get(endBundleId)!.duration = dayjs().diff(
+          this.recorder.getBundleMap().get(endBundleId)!.startTime,
+          "ms"
+        );
 
-      //Generate html root for Display UI(HTML)
-      const htmlRoot = Format.generateHtmlRoot(
-        this.recorder.getBundleMap().get(endBundleId)!.description,
-        traceNodes,
-        this.recorder.getBundleMap().get(endBundleId)!.startTime,
-        this.recorder.getBundleMap().get(endBundleId)!.duration
-      );
-      //Export html
-      this.exporter.exportToHtml(htmlRoot);
-    });
+        //Generate html root for Display UI(HTML)
+        const htmlRoot = Format.generateHtmlRoot(
+          this.recorder.getBundleMap().get(endBundleId)!.description,
+          traceNodes,
+          this.recorder.getBundleMap().get(endBundleId)!.startTime,
+          this.recorder.getBundleMap().get(endBundleId)!.duration
+        );
+        //Export html
+        this.exporter.exportToHtml(htmlRoot);
+      })
+      .catch((error) => {
+        Output.printError(`Tracer.end() failed to generate report: ${error}`);
+      });
   }
 
   private handleDuplicatedStart() {
