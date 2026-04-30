@@ -167,6 +167,31 @@ describe("Integration: browser emit path", () => {
       (globalThis as Record<string, unknown>).addEventListener = origAddListener;
   });
 
+  // Regression: `isDevelopmentMode` used to require NODE_ENV === "development"
+  // exactly, which silently disabled the plugin in setups where Vite's dev
+  // server hadn't set it (the common real-world case — user reported an
+  // empty __INJECTION_DATA__ === "[[]]" because Math.* never got wrapped).
+  // Anything *not* explicitly "production" is now treated as dev.
+  it("treats NODE_ENV undefined / '' / 'test' as development", async () => {
+    const { default: ScryChecker } = await import(
+      "../../src/babel/scry.check.js"
+    );
+    const orig = process.env.NODE_ENV;
+    try {
+      delete process.env.NODE_ENV;
+      expect(ScryChecker.isDevelopmentMode()).toBe(true);
+      process.env.NODE_ENV = "";
+      expect(ScryChecker.isDevelopmentMode()).toBe(true);
+      process.env.NODE_ENV = "test";
+      expect(ScryChecker.isDevelopmentMode()).toBe(true);
+      process.env.NODE_ENV = "production";
+      expect(ScryChecker.isDevelopmentMode()).toBe(false);
+    } finally {
+      if (orig === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = orig;
+    }
+  });
+
   it("isNodeJS does not return true when only `process` polyfill is present", () => {
     // Simulate Vite's `define: { "process.env.NODE_ENV": ... }` which exposes
     // process but no real Node runtime, alongside a window.  Previously this
