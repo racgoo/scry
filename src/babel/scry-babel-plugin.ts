@@ -267,12 +267,22 @@ function transformCall(
   // wrap TRACE_ZONE.run(callback) in another IIFE, causing infinite nesting and
   // "Duplicate declaration 'traceContext'" errors.
   const zoneInternalCall = scryChecker.isZoneInternalCall(path);
+  // Skip any call that lives inside a plugin-generated IIFE (identified by
+  // TRACE_MARKER in its leadingComments).  This is the comprehensive guard
+  // against all forms of re-instrumentation during Babel's re-traversal:
+  //  - the original call embedded in the max-depth guard's return statement
+  //  - globalThis.dispatchEvent() / window.dispatchEvent() in error paths
+  //  - any other generated CallExpression outside TRACE_ZONE.run()
+  // Without this, deeply-nested or complex files throw
+  // "Maximum call stack size exceeded" in vite:react-babel.
+  const insideGeneratedIIFE = scryChecker.isInsideGeneratedIIFE(path);
 
   const skips = [
     !developmentMode,
     zoneRootInitialization,
     traceZoneInitialization,
     zoneInternalCall,
+    insideGeneratedIIFE,
     reactDOMCall,
     requireCall,
     duplicated,

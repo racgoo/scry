@@ -358,6 +358,36 @@ class ScryChecker {
     }
     return this.t.isIdentifier(obj) && obj.name === "Zone";
   }
+
+  /**
+   * Returns true when the current CallExpression / NewExpression is a
+   * descendant of a plugin-generated IIFE (identified by TRACE_MARKER in its
+   * leadingComments).
+   *
+   * This is the primary guard that prevents plugin-generated code from being
+   * re-instrumented during Babel's re-traversal that follows path.replaceWith().
+   * It catches all cases that more specific checks might miss, e.g.:
+   *  - the original call embedded verbatim in createMaxDepthGuard's return
+   *  - globalThis.dispatchEvent() / window.dispatchEvent() in error paths
+   *  - any other generated CallExpression outside the TRACE_ZONE.run() block
+   */
+  public isInsideGeneratedIIFE(
+    path: babel.NodePath<babel.types.CallExpression | babel.types.NewExpression>
+  ): boolean {
+    let current = path.parentPath;
+    while (current) {
+      if (
+        (current.isCallExpression() || current.isNewExpression()) &&
+        (
+          current.node as babel.types.CallExpression | babel.types.NewExpression
+        ).leadingComments?.some((c) => c.value.includes(TRACE_MARKER))
+      ) {
+        return true;
+      }
+      current = current.parentPath;
+    }
+    return false;
+  }
 }
 
 export default ScryChecker;

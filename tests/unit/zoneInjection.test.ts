@@ -109,3 +109,72 @@ describe("Duplicate declaration guard", () => {
     expect(count).toBeLessThanOrEqual(4);
   });
 });
+
+describe("Infinite recursion guard — Maximum call stack size regression", () => {
+  it("does not blow the call stack on a file with many nested calls", () => {
+    // Deeply-nested call expressions stress-test the max-depth guard path:
+    // each call is instrumented and the max-depth guard embeds the original
+    // call verbatim.  Without TRACE_MARKER on the cloned node, Babel's
+    // re-traversal would re-instrument that inner call ad infinitum.
+    expect(() =>
+      transform(`
+        export function complex() {
+          const a = Math.random();
+          const b = parseInt(String(Math.floor(a * 100)), 10);
+          const c = JSON.stringify({ value: b });
+          const d = JSON.parse(c);
+          return Object.keys(d).map(k => k.toUpperCase());
+        }
+      `)
+    ).not.toThrow();
+  });
+
+  it("does not blow the call stack on deeply-nested call chains", () => {
+    expect(() =>
+      transform(`
+        export function chain() {
+          return [1, 2, 3]
+            .filter(x => x > 0)
+            .map(x => x * 2)
+            .reduce((acc, x) => acc + x, 0);
+        }
+      `)
+    ).not.toThrow();
+  });
+
+  it("does not blow the call stack on a React-like component with event handlers", () => {
+    // Simulates a React component file (like ClockWidget/index.tsx) that
+    // uses multiple call expressions inside JSX event handlers.  This is the
+    // exact pattern that originally triggered "Maximum call stack size exceeded"
+    // in vite:react-babel.
+    expect(() =>
+      transform(`
+        export function handleClick(event) {
+          const val = event.target.value;
+          const formatted = new Date(parseInt(val, 10)).toISOString();
+          window.dispatchEvent(new CustomEvent("tick", { detail: formatted }));
+          console.log("dispatched", formatted);
+        }
+        export function processData(items) {
+          return items
+            .filter(Boolean)
+            .map(item => ({ ...item, ts: Date.now() }))
+            .sort((a, b) => a.ts - b.ts);
+        }
+      `)
+    ).not.toThrow();
+  });
+
+  it("plugin-generated IIFE children are not re-instrumented", () => {
+    const output = transform(`
+      export function run() { return Math.random(); }
+    `);
+    // The max-depth guard embeds Math.random() as a cloned node with
+    // TRACE_MARKER, so we must NOT see it wrapped in a second IIFE.
+    // Count plugin-generated IIFEs by looking for the distinctive
+    // "/* __SCRY_MARK__ */(() =>" pattern — should be exactly 1 per call site.
+    const iifes = (output.match(/\/\*.*?__SCRY_MARK__.*?\*\/\s*\(\(\) =>/g) ?? [])
+      .length;
+    expect(iifes).toBe(1);
+  });
+});

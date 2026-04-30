@@ -699,6 +699,16 @@ class ScryAst {
     maxDepth: number,
     originalNode: babel.types.CallExpression | babel.types.NewExpression
   ) {
+    // Clone the original node so the max-depth early-return is not
+    // re-instrumented during the Babel re-traversal that follows
+    // path.replaceWith().  Without the TRACE_MARKER comment the cloned node
+    // would be treated as fresh user code and wrapped in yet another IIFE,
+    // leading to infinite recursion ("Maximum call stack size exceeded").
+    const safeReturn = this.t.cloneNode(originalNode, true);
+    safeReturn.leadingComments = [
+      { type: "CommentBlock", value: ` ${TRACE_MARKER} ` },
+    ];
+
     return this.t.ifStatement(
       this.t.binaryExpression(
         ">=",
@@ -721,7 +731,7 @@ class ScryAst {
         ) as babel.types.Expression,
         this.t.numericLiteral(maxDepth)
       ),
-      this.t.blockStatement([this.t.returnStatement(originalNode)])
+      this.t.blockStatement([this.t.returnStatement(safeReturn)])
     );
   }
 
