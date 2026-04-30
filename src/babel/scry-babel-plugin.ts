@@ -158,6 +158,10 @@ function scryBabelPlugin(
       path: babel.NodePath<babel.types.FunctionDeclaration>
     ) => {
       try {
+        // Skip plugin-generated IIFE bodies — they already have the correct
+        // structure and must not receive an extra var traceContext that would
+        // shadow the outer function's traceContext closure variable.
+        if (scryChecker.isInsideGeneratedIIFE(path)) return;
         scryAst.createTraceConextDeclare(path);
       } catch (error) {
         console.error("FunctionDeclaration error:", error);
@@ -167,6 +171,7 @@ function scryBabelPlugin(
       path: babel.NodePath<babel.types.FunctionExpression>
     ) => {
       try {
+        if (scryChecker.isInsideGeneratedIIFE(path)) return;
         scryAst.createTraceConextDeclare(path);
       } catch (error) {
         console.error("FunctionExpression error:", error);
@@ -176,6 +181,7 @@ function scryBabelPlugin(
       path: babel.NodePath<babel.types.ArrowFunctionExpression>
     ) => {
       try {
+        if (scryChecker.isInsideGeneratedIIFE(path)) return;
         scryAst.createTraceConextDeclare(path);
       } catch (error) {
         console.error("ArrowFunctionExpression error:", error);
@@ -183,6 +189,7 @@ function scryBabelPlugin(
     },
     ClassMethod: (path: babel.NodePath<babel.types.ClassMethod>) => {
       try {
+        if (scryChecker.isInsideGeneratedIIFE(path)) return;
         scryAst.createTraceConextDeclare(path);
       } catch (error) {
         console.error("ClassMethod error:", error);
@@ -190,6 +197,7 @@ function scryBabelPlugin(
     },
     ObjectMethod: (path: babel.NodePath<babel.types.ObjectMethod>) => {
       try {
+        if (scryChecker.isInsideGeneratedIIFE(path)) return;
         scryAst.createTraceConextDeclare(path);
       } catch (error) {
         console.error("ObjectMethod error:", error);
@@ -203,6 +211,12 @@ function scryBabelPlugin(
         try {
           const filename = state.filename ?? "";
           if (!isFileIncluded(filename, options)) return;
+          // If this node is a plugin-generated IIFE, skip it immediately.
+          // This is a direct WeakSet lookup — the most reliable guard.
+          if (scryChecker.isGeneratedIIFE(path.node)) {
+            path.skip();
+            return;
+          }
           transformCall(path, state, t, scryAst, scryChecker, maxDepth);
         } catch (error) {
           console.error("NewExpression.exit error:", error);
@@ -217,6 +231,11 @@ function scryBabelPlugin(
         try {
           const filename = state.filename ?? "";
           if (!isFileIncluded(filename, options)) return;
+          // If this node is a plugin-generated IIFE, skip it immediately.
+          if (scryChecker.isGeneratedIIFE(path.node)) {
+            path.skip();
+            return;
+          }
           transformCall(path, state, t, scryAst, scryChecker, maxDepth);
         } catch (error) {
           console.error("CallExpression.exit error:", error);
@@ -372,8 +391,18 @@ function transformCall(
     { type: "CommentBlock", value: ` ${TRACE_MARKER} ` },
   ];
 
-  path.replaceWith(newNode);
+  // Register the IIFE node in the WeakSet BEFORE calling replaceWith so that
+  // any re-traversal triggered by Babel immediately sees it as generated code.
+  scryChecker.registerGeneratedIIFE(newNode);
+
+  // Call path.skip() BEFORE path.replaceWith() so that the re-queued path
+  // already has shouldSkip=true when Babel's traversal context processes it.
+  // Calling skip() after replaceWith() has a race-condition: in some Babel
+  // versions the re-queued entry is checked for shouldSkip before our handler
+  // sets the flag, causing the generated IIFE to be re-traversed and
+  // triggering cascading re-instrumentation ("Maximum call stack size exceeded").
   path.skip();
+  path.replaceWith(newNode);
 }
 
 /** Auto-detects ESM vs CJS per file (recommended for most setups). */
